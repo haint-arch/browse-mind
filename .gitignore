@@ -1,0 +1,5 @@
+browser-history-chatbot/cb-venv/*
+browser-history-chatbot/.env
+
+browser-history-extension/libs/*
+browser-history-extension/bootstrap/*

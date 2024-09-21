@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistant Interface</title>
+  
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: -100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 280px;
+      height: 300px;
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .assistant-header {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      font-size: 24px;
+      padding: 20px;
+      background-color: #4caf50;
+      color: white;
+    }
+
+    .assistant-header img {
+      margin-right: 10px;
+    }
+
+    .assistant-body {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .assistant-footer {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+    }
+
+    .assistant-footer input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      outline: none;
+    }
+
+    .assistant-footer button {
+      background-color: #4caf50;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      margin-left: 10px;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .invert-color {
+      filter: invert(100%);
+    }
+  </style>
+</head>
+<body>
+  <!-- <button id="historyButton">Open History</button> -->
+  <div class="container">
+    <div class="assistant-header" id="assistantHeader">
+      <div>
+        <img src="assets/bx-search-alt-2.svg" alt="Search Icon" class="invert-color">
+        <h2>Hi, I'm your assistant</h2>
+      </div>
+    </div>
+    <div class="assistant-body" id="chatResponse">
+      <!-- Chat messages will appear here -->
+    </div>
+    <div class="assistant-footer">
+      <input type="text" id="chatInput" placeholder="Write your question..."/>
+      <button id="chatButton">➤</button>
+    </div>
+  </div>
+  <script src="popup.js" defer></script>
+</body>
+</html>

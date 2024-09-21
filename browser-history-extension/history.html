@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser History</title>
+    <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-4">
+    <h1 class="text-center">Browser History</h1>
+
+    <button id="downloadJsonBtn" class="btn btn-primary mb-3">Download JSON</button>
+    <table class="table table-striped" id="historyTable">
+        <thead>
+            <tr>
+                <th scope="col">URL</th>
+                <th scope="col">Visit Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Lịch sử sẽ được thêm vào đây -->
+        </tbody>
+    </table>
+
+    <!-- Modal để hiển thị chi tiết trang -->
+    <div class="modal fade" id="detailsModal" tabindex="-1" role="dialog" aria-labelledby="detailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="detailsModalLabel">Page Details</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <h6 id="pageTitle"></h6>
+                    <p id="pageContent"></p>
+                    <p><strong>Colors:</strong> <span id="pageColors"></span></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="libs/jquery-3.7.1.min.js"></script>
+    <script src="bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="history.js"></script>
+</body>
+</html>
