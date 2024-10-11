@@ -1,44 +1,54 @@
 {
-  "data": [
-    "Tin tức mới nhất trong ngày",
-    "Cách nấu phở bò chuẩn vị Hà Nội",
-    "Hướng dẫn du lịch Đà Nẵng từ A đến Z",
-    "Top 10 quán cà phê đẹp nhất Sài Gòn",
-    "Lịch sử và văn hóa Việt Nam qua các thời kỳ",
-    "Cách chăm sóc da mặt hiệu quả tại nhà",
-    "Xu hướng thời trang nam nữ năm 2024",
-    "Bí quyết học tiếng Anh giao tiếp cấp tốc",
-    "Món ngon mỗi ngày: Thực đơn cho gia đình",
-    "Những địa điểm du lịch hấp dẫn ở miền Bắc",
-    "Review sách: Đắc nhân tâm",
-    "Học lập trình Python từ cơ bản đến nâng cao",
-    "Cách làm bánh mì nướng muối ớt siêu ngon",
-    "Lợi ích của việc chạy bộ buổi sáng",
-    "Cách trồng và chăm sóc cây hoa hồng",
-    "Top 5 bộ phim Việt Nam hay nhất năm 2023",
-    "Bảo vệ sức khỏe mùa hè: Những điều cần biết",
-    "Hướng dẫn mua sắm trực tuyến an toàn",
-    "Tư vấn chọn mua điện thoại thông minh năm 2024",
-    "Cách giảm cân nhanh và an toàn tại nhà",
-    "Làm thế nào để có một giấc ngủ ngon?",
-    "Bí quyết thành công trong kinh doanh online",
-    "Những điều cần biết khi xin visa du học Mỹ",
-    "Hướng dẫn tự học đàn guitar cho người mới bắt đầu",
-    "Các phương pháp dưỡng tóc từ thiên nhiên",
-    "Cách tiết kiệm tiền hiệu quả cho gia đình",
-    "Chọn mua laptop phù hợp cho sinh viên",
-    "Khám phá văn hóa ẩm thực miền Tây",
-    "Bí quyết để trở thành một lập trình viên giỏi",
-    "Top 10 món ăn đường phố nổi tiếng ở Hà Nội",
-    "Làm sao để vượt qua căng thẳng trong công việc?",
-    "Cách xử lý khi trẻ nhỏ bị sốt cao tại nhà",
-    "Hướng dẫn tạo CV ấn tượng khi xin việc",
-    "Cách chăm sóc thú cưng trong mùa đông",
-    "Những điều cần biết khi mua xe ô tô cũ",
-    "Kinh nghiệm chọn mua đồ nội thất cho căn hộ nhỏ",
-    "Cách bảo quản thực phẩm tươi ngon lâu hơn",
-    "Bí quyết học tiếng Nhật hiệu quả",
-    "Hướng dẫn chọn mua đồ dùng cho mẹ và bé",
-    "Các bài tập thể dục giúp giảm mỡ bụng hiệu quả"
+  "history": [
+    {
+      "title": "Tin tức mới nhất trong ngày",
+      "url": "https://news.example.com/latest",
+      "visitTime": "2023-10-01T08:30:00Z"
+    },
+    {
+      "title": "Cách nấu phở bò chuẩn vị Hà Nội",
+      "url": "https://cooking.example.com/pho-bo",
+      "visitTime": "2023-10-01T09:00:00Z"
+    },
+    {
+      "title": "Hướng dẫn du lịch Đà Nẵng từ A đến Z",
+      "url": "https://travel.example.com/da-nang-guide",
+      "visitTime": "2023-10-01T10:00:00Z"
+    },
+    {
+      "title": "Top 10 quán cà phê đẹp nhất Sài Gòn",
+      "url": "https://coffee.example.com/top-10-saigon",
+      "visitTime": "2023-10-01T11:00:00Z"
+    },
+    {
+      "title": "Lịch sử và văn hóa Việt Nam qua các thời kỳ",
+      "url": "https://history.example.com/vietnam",
+      "visitTime": "2023-10-01T12:00:00Z"
+    },
+    {
+      "title": "Cách chăm sóc da mặt hiệu quả tại nhà",
+      "url": "https://beauty.example.com/skin-care",
+      "visitTime": "2023-10-01T13:00:00Z"
+    },
+    {
+      "title": "Xu hướng thời trang nam nữ năm 2024",
+      "url": "https://fashion.example.com/trends-2024",
+      "visitTime": "2023-10-01T14:00:00Z"
+    },
+    {
+      "title": "Bí quyết học tiếng Anh giao tiếp cấp tốc",
+      "url": "https://language.example.com/english-tips",
+      "visitTime": "2023-10-01T15:00:00Z"
+    },
+    {
+      "title": "Món ngon mỗi ngày: Thực đơn cho gia đình",
+      "url": "https://food.example.com/daily-menu",
+      "visitTime": "2023-10-01T16:00:00Z"
+    },
+    {
+      "title": "Những địa điểm du lịch hấp dẫn ở miền Bắc",
+      "url": "https://travel.example.com/northern-vietnam",
+      "visitTime": "2023-10-01T17:00:00Z"
+    }
   ]
 }

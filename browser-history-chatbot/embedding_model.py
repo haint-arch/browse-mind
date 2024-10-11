@@ -1,16 +1,28 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from transformers import AutoTokenizer, AutoModel
 import torch
 import faiss
 import numpy as np
 import os
 import json
+import io
 import gradio as gr
 import requests
+import wave
+import ffmpeg
 from dotenv import load_dotenv
+from pydub import AudioSegment
+from google.oauth2 import service_account
+from google.cloud import speech
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 app = Flask(__name__)
+CORS(app)
+
+AudioSegment.converter = "C:/ffmpeg/bin/ffmpeg.exe"
+AudioSegment.ffprobe = "C:/ffmpeg/bin/ffprobe.exe"
 
 api_key = os.getenv("API_KEY")
 api_url = os.getenv("API_URL")
@@ -19,6 +31,41 @@ headers = {
     "Content-Type": "application/json"
 }
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'sa-speech-history-browser.json'
+
+def transcribe_audio(audio_file):
+    credentials = service_account.Credentials.from_service_account_file('sa-speech-history-browser.json')
+    client = speech.SpeechClient(credentials=credentials)
+
+    # Load audio data
+    audio_data = audio_file.read()
+
+    # Convert stereo to mono using ffmpeg-python
+    input_audio = ffmpeg.input('pipe:0')
+    output_audio = ffmpeg.output(input_audio, 'pipe:1', ac=1, format='wav')
+    process = ffmpeg.run_async(output_audio, pipe_stdin=True, pipe_stdout=True, pipe_stderr=True)
+    mono_audio_data, _ = process.communicate(input=audio_data)
+
+    # Convert mono_audio_data (bytes) to a file-like object
+    mono_audio_data_io = io.BytesIO(mono_audio_data)
+    
+    with wave.open(mono_audio_data_io, 'rb') as wf:
+        sample_rate = wf.getframerate()
+
+    audio = speech.RecognitionAudio(content=mono_audio_data_io.read())
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=sample_rate,
+        language_code='vi-VN'  # For Vietnamese
+    )
+
+    # Send the request to Google Cloud
+    response = client.recognize(config=config, audio=audio)
+
+    # Extract and return the transcription
+    for result in response.results:
+        print(f'Transcript: {result.alternatives[0].transcript}')
+        return result.alternatives[0].transcript
 
 # Function to check if a question is within the scope of the website titles
 def is_question_within_scope(question, website_titles):
@@ -76,20 +123,24 @@ def get_normalized_embeddings(sentences, max_length=128):
 
 # Load data from JSON file
 with open('data.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)['data']
+    data = json.load(f)['history']
 
-# Ensure data is a list of strings
-if not isinstance(data, list) or not all(isinstance(item, str) for item in data):
-    raise ValueError("Data must be a list of strings")
+# Ensure data is a list of dictionaries with 'title' and 'url'
+if not isinstance(data, list) or not all(isinstance(item, dict) and 'title' in item and 'url' in item for item in data):
+    raise ValueError("Data must be a list of dictionaries with 'title' and 'url'")
+
+# Extract titles for embedding
+titles = [item['title'] for item in data]
 
 # Convert data to normalized embeddings
-embeddings = get_normalized_embeddings(data)
+embeddings = get_normalized_embeddings(titles)
+
+index = faiss.IndexFlatIP(embeddings.shape[1])
+index.add(embeddings)
 
 # Function to search for the most similar response
 def search(query):
     query_embedding = get_normalized_embeddings([query])
-    index = faiss.IndexFlatIP(embeddings.shape[1])
-    index.add(embeddings)
     distances, indices = index.search(query_embedding, k=1)
     return data[indices[0][0]], distances[0][0]
 
@@ -102,11 +153,17 @@ def chatbot():
     
     if is_within_scope:
         result, similarity = search(user_message)
-        response = f"Câu tiêu đề liên quan nhất: {result} (Độ tương đồng: {similarity:.2f})"
+        response = f"Câu tiêu đề liên quan nhất: {result['title']} (Độ tương đồng: {similarity:.2f}). URL: {result['url']}"
     else:
         response = "Câu hỏi này không liên quan đến tiêu đề website."
     
     return jsonify({'response': response})
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    audio_file = request.files['audio']
+    transcription = transcribe_audio(audio_file)
+    return jsonify({"transcription": transcription})
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,5 +1,6 @@
 browser-history-chatbot/cb-venv/*
 browser-history-chatbot/.env
+browser-history-chatbot/sa-speech-history-browser.json
 
 browser-history-extension/libs/*
 browser-history-extension/bootstrap/*
