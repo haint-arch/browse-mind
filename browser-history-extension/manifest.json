@@ -4,16 +4,19 @@
   "version": "1.0",
   "description": "Track and display browser history.",
   "permissions": [
-    "microphone",
+    "notifications",
     "tabs",
     "downloads",
     "activeTab",
     "storage",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
-    "<all_urls>",
-    "audioCapture"
+    "history",
+    "webNavigation"
   ],
+  "background": {
+    "service_worker": "service_worker.js"
+  },
   "action": {
     "default_popup": "popup.html"
   }

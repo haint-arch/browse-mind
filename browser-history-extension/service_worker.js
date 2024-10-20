@@ -1,23 +1,15 @@
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'getPageDetails') {
-        fetch(message.url)
-            .then(response => response.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('background.js')
+        .then(function (registration) {
+            console.log('Service Worker registered with scope:', registration.scope);
+        })
+        .catch(function (error) {
+            console.error('Service Worker registration failed:', error);
+        });
+}
 
-                const title = doc.querySelector('title') ? doc.querySelector('title').innerText : 'No title found';
-                const content = extractMainContent(doc);
-                const colors = extractColorsFromPage(doc);
-
-                sendResponse({ title, content, colors });
-            })
-            .catch(error => {
-                console.error('Error fetching the page:', error);
-                sendResponse({ error: error.message });
-            });
-        return true;
-    }
+chrome.runtime.onInstalled.addListener(() => {
+    console.log("Service Worker đã được cài đặt!");
 });
 
 function extractMainContent(doc) {
@@ -33,26 +25,48 @@ function extractColorsFromPage(doc) {
     return [...new Set(styles)];
 }
 
-browser.webNavigation.onCompleted.addListener((details) => {
+chrome.webNavigation.onCompleted.addListener((details) => {
     if (details.frameId === 0) { // Chỉ xử lý khi toàn bộ trang web đã tải xong (không phải iframe)
         const url = details.url;
         const visitTime = Date.now();
 
         saveHistoryToDB(url, visitTime);
 
-        // Tải xuống source của trang web và phân tích nội dung
-        fetchPageSourceAndAnalyze(url).then(analysisResult => {
-            // Lưu kết quả phân tích vào IndexedDB
-            saveAnalysisToDB(url, analysisResult);
-        }).catch(error => console.error('Failed to analyze page:', error));
+        console.log('Page loaded:', url, isSearchURL(url));
 
-        // Gửi thông điệp tới `history.js` để cập nhật danh sách lịch sử
-        browser.runtime.sendMessage({
-            action: 'newHistoryItem',
-            item: { url, visitTime }
-        });
+        if (!isSearchURL(url)) {
+            saveHistoryToDB(url, visitTime);
+
+            // Tải xuống source của trang web và phân tích nội dung
+            fetchPageSourceAndAnalyze(url).then(analysisResult => {
+                // Lưu kết quả phân tích vào IndexedDB
+                saveAnalysisToDB(url, analysisResult);
+            }).catch(error => console.error('Failed to analyze page:', error));
+
+            // Gửi thông điệp tới `history.js` để cập nhật danh sách lịch sử
+            chrome.runtime.sendMessage({
+                action: 'newHistoryItem',
+                item: { url, visitTime }
+            });
+        }
     }
 });
+
+function isSearchURL(url) {
+    const searchEngines = [
+        'https://www.google.com/search',
+        'https://search.yahoo.com/search',
+        'https://www.bing.com/search',
+        'https://duckduckgo.com/',
+        'https://www.baidu.com/s',
+        'https://yandex.com/search/',
+        'https://www.ask.com/web',
+        'https://search.aol.com/aol/search',
+        'https://www.ecosia.org/search'
+    ];
+
+    return searchEngines.some(engine => url.startsWith(engine));
+}
 
 function saveHistoryToDB(url, visitTime) {
     openDatabase().then(db => {
@@ -100,19 +114,6 @@ function fetchPageSourceAndAnalyze(url) {
         });
 }
 
-function extractMainContent(doc) {
-    const mainContent = doc.querySelector('article') || doc.querySelector('main') || doc.body;
-    return mainContent ? mainContent.innerText.trim().substring(0, 500) : 'No content found';
-}
-
-function extractColorsFromPage(doc) {
-    const styles = Array.from(doc.querySelectorAll('*'))
-        .map(el => window.getComputedStyle(el).backgroundColor)
-        .filter(color => color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent');
-
-    return [...new Set(styles)];
-}
-
 function openDatabase() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open('historyDB', 1);
@@ -134,11 +135,68 @@ function openDatabase() {
     });
 }
 
+function getAllHistoryItems() {
+    return new Promise((resolve, reject) => {
+        openDatabase().then(db => {
+            const tx = db.transaction('history', 'readonly');
+            const store = tx.objectStore('history');
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                resolve(request.result);
+            };
+
+            request.onerror = (event) => {
+                reject(event.target.error);
+            };
+        }).catch(error => reject(error));
+    });
+}
+
+function clearHistory() {
+    return new Promise((resolve, reject) => {
+        openDatabase().then(db => {
+            const tx = db.transaction('history', 'readwrite');
+            const store = tx.objectStore('history');
+            const request = store.clear();
+
+            request.onsuccess = () => {
+                console.log('History cleared');
+                resolve();
+            };
+
+            request.onerror = (event) => {
+                reject(event.target.error);
+            };
+        }).catch(error => reject(error));
+    });
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'getAllHistoryItems') {
+        getAllHistoryItems().then(items => {
+            sendResponse({ items });
+        }).catch(error => {
+            console.error('Error fetching history items:', error);
+            sendResponse({ error: error.message });
+        });
+        return true; // Giữ kênh message mở để gửi phản hồi không đồng bộ
+    } else if (message.action === 'clearHistory') {
+        clearHistory().then(() => {
+            sendResponse({ status: 'success' });
+        }).catch(error => {
+            console.error('Error clearing history:', error);
+            sendResponse({ error: error.message });
+        });
+        return true; // Giữ kênh message mở để gửi phản hồi không đồng bộ
+    }
+});
+
 async function storeHistoryItem(pageData) {
     const db = await openDatabase();
     const tx = db.transaction('history', 'readwrite');
     const store = tx.objectStore('history');
-    
+
     return new Promise((resolve, reject) => {
         const request = store.add(pageData);
         request.onsuccess = () => resolve();
@@ -150,8 +208,8 @@ async function storeHistoryItem(pageData) {
 async function fetchAndStoreHistory() {
     const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
-    browser.history.search({
-        text: '',           
+    chrome.history.search({
+        text: '',
         startTime: oneMonthAgo,
         maxResults: 1000      // Giới hạn số lượng kết quả 
     }).then(async (results) => {
@@ -163,7 +221,11 @@ async function fetchAndStoreHistory() {
             };
 
             try {
-                await storeHistoryItem(pageData);
+                if (!isSearchURL(pageData.url)) {
+                    // const analysisResult = await fetchPageSourceAndAnalyze(pageData.url);
+                    // pageData.analysis = analysisResult;
+                    await storeHistoryItem(pageData);
+                }
             } catch (error) {
                 console.error('Error storing history item:', error);
             }

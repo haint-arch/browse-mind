@@ -42,24 +42,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             addHistoryItemToTable(historyTable, message.item.url, message.item.visitTime);
         }
     });
-
-    historyTable.addEventListener('click', async (event) => {
-        if (event.target.classList.contains('history-link')) {
-            console.log('History link clicked:', event.target);
-            event.preventDefault();
-            const url = event.target.getAttribute('data-url');
-            console.log('Opening page details for:', url);
-            
-            const details = await getPageDetails(url);
-
-            document.getElementById('pageTitle').textContent = details.title;
-            document.getElementById('pageContent').textContent = details.content;
-            document.getElementById('pageColors').textContent = details.colors.join(', ');
-
-            console.log("Showing modal...");
-            $('#detailsModal').modal('show');
-        }
-    });
 });
 
 
@@ -97,12 +79,6 @@ function openDatabase() {
         request.onerror = event => {
             reject(event.target.error);
         };
-    });
-}
-
-function getPageDetails(url) {
-    return new Promise((resolve) => {
-        browser.runtime.sendMessage({ action: 'getPageDetails', url }, resolve);
     });
 }
 

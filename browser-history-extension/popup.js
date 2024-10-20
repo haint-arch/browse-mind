@@ -1,75 +1,167 @@
 document.addEventListener('DOMContentLoaded', () => {
     let recorder;
-    let audioChunks = [];
     let isRecording = false;
     let startTime;
     let elapsedTimeInterval;
+    let socket;
 
     const chatInput = document.getElementById('chatInput');
     const chatButton = document.getElementById('chatButton');
     const chatResponse = document.getElementById('chatResponse');
-    // const historyButton = document.getElementById('historyButton');
     const assistantHeader = document.getElementById('assistantHeader');
-
     const headerH2 = assistantHeader.querySelector('h2');
-
     const recordButton = document.getElementById('recordButton');
     const micIcon = document.getElementById('micIcon');
 
-    micIcon.addEventListener('click', async () => {
-        if (!isRecording) {
-            startRecording();
-        } else {
-            stopRecording();
+    if (navigator.serviceWorker) {
+        navigator.serviceWorker.ready.then(registration => {
+            registration.active.postMessage({ action: 'activate' });
+        });
+    }
+
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'keep_alive') {
+            console.log('Received keep_alive message');
+            sendResponse({ status: 'alive' });
         }
     });
 
-    // Function to load the most recent chat from localStorage
-    const loadRecentChat = () => {
-        const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
-        if (recentChat.question) {
-            chatInput.value = recentChat.question;
+    micIcon.addEventListener('click', () => {
+        isRecording ? stopRecording() : startRecording();
+    });
+
+    chatButton.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            sendMessage();
         }
+    });
+    
+    function fetchHistoryFromIndexedDB() {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ action: 'getAllHistoryItems' }, (response) => {
+                response.error ? reject(response.error) : resolve(response.items);
+            });
+        });
+    }
+
+    async function sendHistoryToServerWithLoading() {
+        try {
+            setChatboxReadonly(true);
+            showLoadingAnimation(true, 'Embedding...');
+
+            let historyItems = await fetchHistoryFromIndexedDB();
+            historyItems = filterDuplicateHistory(historyItems);
+
+            const response = await fetch('http://localhost:5000/upload_history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: historyItems })
+            });
+
+            if (!response.ok) throw new Error('Failed to upload history to server');
+            console.log('History uploaded successfully');
+        } catch (error) {
+            console.error('Error uploading history:', error);
+        } finally {
+            setChatboxReadonly(false);
+            showLoadingAnimation(false);
+        }
+    }
+
+    function filterDuplicateHistory(historyItems) {
+        const uniqueHistory = [];
+        const seenUrls = new Set();
+
+        for (const item of historyItems) {
+            if (!seenUrls.has(item.url)) {
+                uniqueHistory.push(item);
+                seenUrls.add(item.url);
+            }
+        }
+        return uniqueHistory;
+    }
+
+    function setChatboxReadonly(isReadonly) {
+        chatInput.readOnly = isReadonly;
+        chatButton.disabled = isReadonly;
+    }
+
+    function showLoadingAnimation(show, message = '') {
+        let loadingElement = document.querySelector('.loading-animation');
+        if (show) {
+            if (!loadingElement) {
+                loadingElement = document.createElement('div');
+                loadingElement.classList.add('loading-animation');
+                loadingElement.textContent = message;
+                document.body.appendChild(loadingElement);
+            }
+        } else {
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+        }
+    }
+
+    async function initializeHistory() {
+        try {
+            await sendHistoryToServerWithLoading();
+            await clearIndexedDB();
+        } catch (error) {
+            console.error('Error initializing history:', error);
+        }
+    }
+
+    async function clearIndexedDB() {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ action: 'clearHistory' }, (response) => {
+                response.error ? reject(response.error) : resolve();
+            });
+        });
+    }
+
+    loadRecentChat();
+    
+    // Call initializeHistory to upload and embed history when the popup is opened
+    if (!localStorage.getItem('historyInitialized')) {
+        initializeHistory();
+        localStorage.setItem('historyInitialized', 'true');
+    }
+
+    function loadRecentChat() {
+        const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
+        if (recentChat.question) chatInput.value = recentChat.question;
         if (recentChat.response) {
             const messageElement = createResponseElement(recentChat.response);
             chatResponse.appendChild(messageElement);
         }
-        // If recentChat exists, clear chatInput and shrink assistantHeader
         if (recentChat.question || recentChat.response) {
             chatInput.value = '';
             assistantHeader.style.height = '';
             headerH2.remove();
         }
-    };
+    }
 
-    // Function to save the most recent chat to localStorage
-    const saveRecentChat = (question, response) => {
-        const recentChat = { question, response };
-        localStorage.setItem('recentChat', JSON.stringify(recentChat));
-    };
+    function saveRecentChat(question, response) {
+        localStorage.setItem('recentChat', JSON.stringify({ question, response }));
+    }
 
-    // Function to create response element
-    const createResponseElement = (responseText) => {
+    function createResponseElement(responseText) {
         const messageElement = document.createElement('div');
         messageElement.classList.add('response-message');
 
-        // Extract title, URL, and similarity from response
         const regex = /Câu tiêu đề liên quan nhất: (.+) \(Độ tương đồng: (.+)\)\. URL: (.+)/;
         const match = responseText.match(regex);
 
         if (match) {
-            const title = match[1];
-            const similarity = match[2];
-            const url = match[3];
+            const [_, title, similarity, url] = match;
 
-            // Create title element as <a>
             const titleElement = document.createElement('a');
             titleElement.href = url;
             titleElement.textContent = title;
             titleElement.target = '_blank';
             messageElement.appendChild(titleElement);
 
-            // Create similarity element
             const similarityElement = document.createElement('div');
             similarityElement.textContent = `Độ tương đồng: ${similarity}`;
             similarityElement.classList.add('similarity');
@@ -79,86 +171,84 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return messageElement;
-    };
+    }
 
-    const sendMessage = async () => {
+    async function sendMessage() {
         const message = chatInput.value.trim();
-        if (message) {
-            try {
-                // Set h2 innerText to '' and adjust container height smoothly
-                if (headerH2) {
-                    assistantHeader.style.height = '100px';  // Shrink header
-                    headerH2.remove();
-                }
+        if (!message) return;
 
-                // Add loading spinner
-                const loadingElement = document.createElement('div');
-                loadingElement.classList.add('loading');
-                assistantHeader.appendChild(loadingElement);
+        try {
+            if (headerH2) {
+                assistantHeader.style.height = '100px';
+                headerH2.remove();
+            }
 
-                // Clear previous responses
-                chatResponse.innerHTML = '';
+            const loadingElement = document.createElement('div');
+            loadingElement.classList.add('loading');
+            assistantHeader.appendChild(loadingElement);
 
-                // Fetch the response
-                const response = await fetch('http://localhost:5000/chatbot', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ query: message })
-                });
+            chatResponse.innerHTML = '';
 
-                const data = await response.json();
-                const messageElement = createResponseElement(data.response);
-                chatResponse.appendChild(messageElement);
+            const response = await fetch('http://localhost:5000/chatbot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: message })
+            });
 
-                // Save response to localStorage
-                saveRecentChat(message, data.response);
+            const data = await response.json();
+            const messageElement = createResponseElement(data.response);
+            chatResponse.appendChild(messageElement);
 
-                // Check if recentChat exists and perform actions
-                const recentChat = JSON.parse(localStorage.getItem('recentChat'));
-                if (recentChat) {
-                    assistantHeader.removeChild(loadingElement);
-                    assistantHeader.style.height = '';
-                    chatInput.value = '';
-                }
+            saveRecentChat(message, data.response);
 
-            } catch (error) {
-                console.error('Error communicating with the chatbot:', error);
-                const errorElement = document.createElement('div');
-                errorElement.textContent = 'Error communicating with the chatbot.';
-                errorElement.classList.add('response-message');
-                chatResponse.appendChild(errorElement);
+            const recentChat = JSON.parse(localStorage.getItem('recentChat'));
+            if (recentChat) {
+                assistantHeader.removeChild(loadingElement);
+                assistantHeader.style.height = '';
+                chatInput.value = '';
+            }
+        } catch (error) {
+            console.error('Error communicating with the chatbot:', error);
+            const errorElement = document.createElement('div');
+            errorElement.textContent = 'Error communicating with the chatbot.';
+            errorElement.classList.add('response-message');
+            chatResponse.appendChild(errorElement);
 
-                // Save error message to localStorage
-                saveRecentChat(message, 'Error communicating with the chatbot.');
+            saveRecentChat(message, 'Error communicating with the chatbot.');
 
-                if (loadingElement && assistantHeader.contains(loadingElement)) {
-                    assistantHeader.removeChild(loadingElement);
-                    assistantHeader.style.height = '';
-                }
+            if (loadingElement && assistantHeader.contains(loadingElement)) {
+                assistantHeader.removeChild(loadingElement);
+                assistantHeader.style.height = '';
             }
         }
-    };
+    }
 
     async function startRecording() {
         try {
-            // Yêu cầu quyền truy cập microphone
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            // Tạo MediaRecorder và ghi âm
             recorder = new MediaRecorder(stream);
+
             recorder.ondataavailable = (e) => {
-                audioChunks.push(e.data);
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(e.data);
+                }
             };
 
             recorder.onstart = () => {
                 startTime = Date.now();
-                updateMicIcon(true);  // Cập nhật nút micro thành màu đỏ
-                startTimer();  // Hiển thị thời gian ghi âm
+                updateMicIcon(true);
+                startTimer();
+                socket = new WebSocket('ws://localhost:5000/transcribe_stream');
+                socket.onopen = () => console.log('WebSocket connection established');
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    chatInput.value += data.transcription + ' ';
+                };
+                socket.onerror = (error) => console.error('WebSocket error:', error);
+                socket.onclose = () => console.log('WebSocket connection closed');
             };
 
-            recorder.start();
+            recorder.start(100);
             isRecording = true;
         } catch (err) {
             console.error('Lỗi khi truy cập microphone:', err);
@@ -166,48 +256,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Dừng ghi âm và gửi file .wav đến API
-    async function stopRecording() {
+    function stopRecording() {
         recorder.stop();
-        recorder.onstop = async () => {
-            updateMicIcon(false);  // Cập nhật nút micro thành màu trắng
-            stopTimer();  // Dừng hiển thị thời gian ghi âm
-
-            // Tạo Blob từ dữ liệu âm thanh đã ghi
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            audioChunks = [];  // Xóa dữ liệu cũ
-
-            // Gửi file âm thanh đến API /transcribe
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.wav');
-
-            try {
-                const response = await fetch('http://localhost:5000/transcribe', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                chatResponse.innerHTML = ``;
-                chatInput.value = data.transcription;
-            } catch (error) {
-                console.error('Error sending audio to the server:', error);
-                chatResponse.innerHTML = 'Lỗi trong quá trình xử lý âm thanh.';
-            }
-
-            isRecording = false;
-        };
+        updateMicIcon(false);
+        stopTimer();
+        if (socket) socket.close();
+        isRecording = false;
     }
 
-    // Cập nhật trạng thái nút microphone
     function updateMicIcon(isRecording) {
-        if (isRecording) {
-            recordButton.classList.add('recording'); 
-        } else {
-            recordButton.classList.remove('recording'); 
-        }
+        recordButton.classList.toggle('recording', isRecording);
     }
 
-    // Hiển thị thời gian ghi âm
     function startTimer() {
         elapsedTimeInterval = setInterval(() => {
             const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -215,22 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 
-    // Dừng hiển thị thời gian ghi âm
     function stopTimer() {
         clearInterval(elapsedTimeInterval);
-        chatResponse.innerHTML = 'Transcribing...';
+        chatResponse.innerHTML = '';
     }
-
-    chatButton.addEventListener('click', sendMessage);
-    chatInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            sendMessage();
-        }
-    });
-
-    loadRecentChat();
-
-    // historyButton.addEventListener('click', () => {
-    //     window.open('history.html', '_blank');
-    // });
 });
