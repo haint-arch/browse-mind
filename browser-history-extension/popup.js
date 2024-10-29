@@ -72,11 +72,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterDuplicateHistory(historyItems) {
         const uniqueHistory = [];
         const seenUrls = new Set();
+        const seenTitles = new Set();
 
         for (const item of historyItems) {
-            if (!seenUrls.has(item.url)) {
+            if (!seenUrls.has(item.url) && !seenTitles.has(item.title)) {
                 uniqueHistory.push(item);
                 seenUrls.add(item.url);
+                seenTitles.add(item.title);
             }
         }
         return uniqueHistory;
@@ -121,12 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadRecentChat();
-    
-    // Call initializeHistory to upload and embed history when the popup is opened
-    if (!localStorage.getItem('historyInitialized')) {
-        initializeHistory();
-        localStorage.setItem('historyInitialized', 'true');
-    }
+    initializeHistory()
 
     function loadRecentChat() {
         const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
@@ -189,10 +186,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             chatResponse.innerHTML = '';
 
-            const response = await fetch('http://localhost:5000/chatbot', {
+            // Gửi yêu cầu đến server để tiền xử lý câu hỏi (NLP)
+            const nlpResponse = await fetch('http://localhost:5000/nlp_process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: message })
+            });
+            const nlpData = await nlpResponse.json();
+    
+            // Sau khi đã xử lý xong câu hỏi, gửi câu hỏi đã lọc đến mô hình ngữ nghĩa
+            const response = await fetch('http://localhost:5000/semantic_search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filtered_query: nlpData.filtered_query })
             });
 
             const data = await response.json();

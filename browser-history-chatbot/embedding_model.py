@@ -2,7 +2,8 @@ import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sockets import Sockets
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM, AutoTokenizer, AutoModelForTokenClassification, pipeline
+from urllib.parse import urlparse, parse_qs, urlunparse
 import torch
 import faiss
 import numpy as np
@@ -20,6 +21,9 @@ from pydub import AudioSegment
 from google.oauth2 import service_account
 from google.cloud import speech
 from werkzeug.utils import secure_filename
+from pyvi.ViTokenizer import tokenize
+
+logging.info(f"NumPy version: {np.__version__}")
 
 load_dotenv()
 app = Flask(__name__)
@@ -41,35 +45,68 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 # os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'sa-speech-history-browser.json'
 
 history_data = []
-sample_questions = [
-    "Lịch sử duyệt web của tôi là gì?",
-    "Hiển thị các tìm kiếm gần đây của tôi.",
-    "Tôi đã truy cập những trang web nào tuần trước?",
-    "Bạn có thể liệt kê lịch sử duyệt web của tôi không?",
-    "Những trang web tôi đã truy cập gần đây là gì?"
-]
 
 # Lưu trữ embeddings cho history_data
 vectorstore = None
 
-# Load the tokenizer and model
-model_name = 'bkai-foundation-models/vietnamese-bi-encoder'
-# model_name = 'keepitreal/vietnamese-sbert'
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModel.from_pretrained(model_name)
+# Load the tokenizer and model for semantic similarity
+semantic_model_name = 'bkai-foundation-models/vietnamese-bi-encoder'
+semantic_tokenizer = AutoTokenizer.from_pretrained(semantic_model_name)
+semantic_model = AutoModel.from_pretrained(semantic_model_name)
 
-# Function to compute sentence embeddings and normalize them for cosine similarity
+# Load a lightweight NER model (DistilBERT)
+ner_model_name = "distilbert-base-uncased"
+ner_tokenizer = AutoTokenizer.from_pretrained(ner_model_name)
+ner_model = AutoModelForTokenClassification.from_pretrained(ner_model_name)
+ner_pipeline = pipeline("ner", model=ner_model, tokenizer=ner_tokenizer)
+
+def normalize_url(url):
+    parsed_url = urlparse(url)
+    query_params = parse_qs(parsed_url.query)
+    if 'v' in query_params:
+        normalized_query = f"v={query_params['v'][0]}"
+        normalized_url = urlunparse(parsed_url._replace(query=normalized_query))
+        return normalized_url
+    return url
+
+def filterDuplicateHistory(historyItems):
+    uniqueHistory = []
+    seenUrls = set()
+    seenTitles = set()
+
+    for item in historyItems:
+        normalized_url = normalize_url(item['url'])
+        if normalized_url not in seenUrls and item['title'] not in seenTitles:
+            uniqueHistory.append(item)
+            seenUrls.add(normalized_url)
+            seenTitles.add(item['title'])
+    return uniqueHistory
+
+# Hàm tách từ khóa từ câu hỏi người dùng
+def extract_keywords(prompt):
+    ner_results = ner_pipeline(prompt)
+    keywords = [entity['word'] for entity in ner_results if entity['entity'] in ["TITLE", "CONTENT", "COLOR", "TIME"]]
+    return " ".join(keywords)
+
 def get_normalized_embeddings(sentences, max_length=128):
-    inputs = tokenizer(sentences, return_tensors='pt', padding=True, truncation=True, max_length=max_length)
+    sentences = [tokenize(sentence) for sentence in sentences]
+    inputs = semantic_tokenizer(sentences, return_tensors='pt', padding=True, truncation=True, max_length=max_length)
     with torch.no_grad():
-        embeddings = model(**inputs).pooler_output
-    # Normalize the embeddings to use cosine similarity
+        embeddings = semantic_model(**inputs).last_hidden_state.mean(dim=1)
     norms = torch.norm(embeddings, dim=1, keepdim=True)
-    normalized_embeddings = embeddings / norms 
-    return normalized_embeddings.cpu().numpy()
+    return (embeddings / norms).cpu().numpy()
 
-# Compute embeddings for sample questions 
-sample_question_embeddings = get_normalized_embeddings(sample_questions)
+def semantic_search_with_ner(user_input):
+    keywords = extract_keywords(user_input)
+    logging.info("Extracted Keywords: %s", keywords)
+    query_embedding = get_normalized_embeddings([keywords])
+    
+    if vectorstore is None:
+        logging.info("Vectorstore is not initialized. Computing embeddings for history data.")
+        compute_history_embeddings()
+    
+    distances, indices = vectorstore.search(query_embedding, k=1)
+    return history_data[indices[0][0]], distances[0][0]
 
 def transcribe_audio_stream(audio_generator):
     credentials = service_account.Credentials.from_service_account_file('sa-speech-history-browser.json')
@@ -96,22 +133,43 @@ def transcribe_audio_stream(audio_generator):
                 yield result.alternatives[0].transcript
 
 # Function to check if a question is within the scope of the website titles
-def is_question_within_scope(question, sample_questions, sample_question_embeddings):
-    # Compute embedding for the user's question
-    question_embedding = get_normalized_embeddings([question])
+def is_question_within_scope(question):
+    # Craft the prompt
+    prompt = f"Is the following question within the scope of browser history search?\n\nQuestion: {question}\n\nAnswer with 'yes' or 'no'."
     
-    # Use FAISS to find the most similar sample question
-    index = faiss.IndexFlatIP(sample_question_embeddings.shape[1])
-    index.add(sample_question_embeddings)
+    # Prepare the payload for the API request
+    data = {
+        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "messages": [{"role": "user", "content": prompt}]
+    }
     
-    distances, indices = index.search(question_embedding, k=1)
+    try:
+        response = requests.post(api_url, headers=headers, json=data)
+        response.raise_for_status()  
+        result = response.json()
+        
+        # Print the full response for debugging
+        print("API Response:", result)
+        
+        # Check if the expected fields are in the response
+        if "choices" in result and "message" in result["choices"][0]:
+            content = result["choices"][0]["message"]["content"]
+            if "Yes" in content or "yes" in content:	
+                return True, content
+            elif "No" in content or "no" in content:
+                return False, content
+        else:
+            print("Unexpected API response format.")
+            return False, "Unexpected API response."
+
+    except requests.exceptions.HTTPError as err:
+        print(f"HTTP error occurred: {err}")
+    except requests.exceptions.RequestException as err:
+        print(f"Error occurred: {err}")
+    except KeyError as err:
+        print(f"KeyError: {err} in API response")
     
-    # Check if the most similar sample question is within a certain threshold
-    logging.info("Similarity score for the user's query: %.2f", distances[0][0])
-    if distances[0][0] > 0.1:
-        return True, sample_questions[indices[0][0]]
-    else:
-        return False, "Câu hỏi không liên quan đến lịch sử duyệt web."
+    return False, "API request failed."
 
 # Ensure data is a list of dictionaries with 'title' and 'url'
 def validate_history_data(data):
@@ -152,13 +210,14 @@ def chatbot():
     user_message = request.json.get('query', '')
     logging.info("Received user message: %s", user_message)
     
-    is_within_scope, relevant_title = is_question_within_scope(user_message, sample_questions, sample_question_embeddings)
+    is_within_scope, relevant_title = is_question_within_scope(user_message)
     logging.info("Is question within scope: %s", is_within_scope)
 
     if is_within_scope:
-        result, similarity = search(user_message)
+        result, similarity, entities = semantic_search_with_ner(user_message)
         if result:
-            response = f"Câu tiêu đề liên quan nhất: {result['title']} (Độ tương đồng: {similarity:.2f}). URL: {result['url']}"
+            response = (f"Câu tiêu đề liên quan nhất: {result['title']} (Độ tương đồng: {similarity:.2f}). "
+                        f"URL: {result['url']}. Từ khóa: {entities}")
         else:
             response = "Không tìm thấy tiêu đề liên quan."
     else:
@@ -191,6 +250,11 @@ def transcribe_socket(ws):
     for transcript in transcribe_audio_stream(audio_generator()):
         ws.send(json.dumps({"transcription": transcript}))
 
+def save_history_to_json(history_data):
+    with open('history_data.json', 'w', encoding='utf-8') as f:
+        json.dump(history_data, f, ensure_ascii=False, indent=4)
+    logging.info("History data saved to history_data.json")
+
 @app.route('/upload_history', methods=['POST'])
 def upload_history():
     global history_data, vectorstore
@@ -201,9 +265,15 @@ def upload_history():
     except ValueError as e:
         logging.error("Validation error: %s", e)
         return jsonify({'status': 'error', 'message': str(e)}), 400
+
+    # Lọc dữ liệu lịch sử để loại bỏ các URL và tiêu đề trùng lặp
+    new_history_data = filterDuplicateHistory(new_history_data)
     
     # Append new history data to existing history_data
     history_data.extend(new_history_data)
+
+    # Save history data to JSON file
+    save_history_to_json(history_data)
     
     # Compute embeddings for new history data and add to vectorstore
     new_titles = [item['title'] for item in new_history_data]
