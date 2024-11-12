@@ -45,10 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function sendHistoryToServerWithLoading() {
+    async function uploadHistory() {
         try {
             setChatboxReadonly(true);
-            showLoadingAnimation(true, 'Embedding...');
+            showLoadingAnimation(true, 'Uploading history...');
 
             let historyItems = await fetchHistoryFromIndexedDB();
             historyItems = filterDuplicateHistory(historyItems);
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function initializeHistory() {
         try {
-            await sendHistoryToServerWithLoading();
+            await uploadHistory();
             await clearIndexedDB();
         } catch (error) {
             console.error('Error initializing history:', error);
@@ -186,19 +186,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             chatResponse.innerHTML = '';
 
-            // Gửi yêu cầu đến server để tiền xử lý câu hỏi (NLP)
-            const nlpResponse = await fetch('http://localhost:5000/nlp_process', {
+            const response = await fetch('http://localhost:5000/chatbot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: message })
-            });
-            const nlpData = await nlpResponse.json();
-    
-            // Sau khi đã xử lý xong câu hỏi, gửi câu hỏi đã lọc đến mô hình ngữ nghĩa
-            const response = await fetch('http://localhost:5000/semantic_search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filtered_query: nlpData.filtered_query })
             });
 
             const data = await response.json();

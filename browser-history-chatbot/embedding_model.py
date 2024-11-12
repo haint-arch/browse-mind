@@ -10,20 +10,21 @@ import numpy as np
 import os
 import json
 import io
+import re
 import gradio as gr
 import requests
 import wave
 import ffmpeg
 import queue
+import ast
 import threading
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from pydub import AudioSegment
 from google.oauth2 import service_account
 from google.cloud import speech
 from werkzeug.utils import secure_filename
-from pyvi.ViTokenizer import tokenize
-
-logging.info(f"NumPy version: {np.__version__}")
 
 load_dotenv()
 app = Flask(__name__)
@@ -54,11 +55,35 @@ semantic_model_name = 'bkai-foundation-models/vietnamese-bi-encoder'
 semantic_tokenizer = AutoTokenizer.from_pretrained(semantic_model_name)
 semantic_model = AutoModel.from_pretrained(semantic_model_name)
 
-# Load a lightweight NER model (DistilBERT)
-ner_model_name = "distilbert-base-uncased"
-ner_tokenizer = AutoTokenizer.from_pretrained(ner_model_name)
-ner_model = AutoModelForTokenClassification.from_pretrained(ner_model_name)
-ner_pipeline = pipeline("ner", model=ner_model, tokenizer=ner_tokenizer)
+def create_temp_vectorstore(filtered_history):
+    temp_vectorstore = faiss.IndexFlatIP(vectorstore.d)
+    temp_embeddings = get_normalized_embeddings([item['title'] for item in filtered_history])
+    temp_vectorstore.add(temp_embeddings)
+    return temp_vectorstore
+
+def crawl_website_content(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        content = soup.get_text(separator=' ', strip=True)  # Lấy toàn bộ nội dung văn bản của trang web
+        return content
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Không thể truy cập URL {url}. Lỗi: {e}")
+        return None
+
+def extract_json_from_response(response_text):
+    # Sử dụng biểu thức chính quy để trích xuất nội dung JSON từ chuỗi văn bản
+    match = re.search(r'\{.*\}', response_text, re.DOTALL)
+    if match:
+        json_str = match.group(0)
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logging.error(f"JSONDecodeError: {e}")
+            return None
+    return None
 
 def normalize_url(url):
     parsed_url = urlparse(url)
@@ -82,31 +107,18 @@ def filterDuplicateHistory(historyItems):
             seenTitles.add(item['title'])
     return uniqueHistory
 
-# Hàm tách từ khóa từ câu hỏi người dùng
-def extract_keywords(prompt):
-    ner_results = ner_pipeline(prompt)
-    keywords = [entity['word'] for entity in ner_results if entity['entity'] in ["TITLE", "CONTENT", "COLOR", "TIME"]]
-    return " ".join(keywords)
-
 def get_normalized_embeddings(sentences, max_length=128):
-    sentences = [tokenize(sentence) for sentence in sentences]
     inputs = semantic_tokenizer(sentences, return_tensors='pt', padding=True, truncation=True, max_length=max_length)
     with torch.no_grad():
-        embeddings = semantic_model(**inputs).last_hidden_state.mean(dim=1)
+        embeddings = semantic_model(**inputs).pooler_output
     norms = torch.norm(embeddings, dim=1, keepdim=True)
     return (embeddings / norms).cpu().numpy()
 
-def semantic_search_with_ner(user_input):
-    keywords = extract_keywords(user_input)
-    logging.info("Extracted Keywords: %s", keywords)
-    query_embedding = get_normalized_embeddings([keywords])
+def semantic_search(user_input, temp_vectorstore, filtered_history):
+    query_embedding = get_normalized_embeddings([user_input])
     
-    if vectorstore is None:
-        logging.info("Vectorstore is not initialized. Computing embeddings for history data.")
-        compute_history_embeddings()
-    
-    distances, indices = vectorstore.search(query_embedding, k=1)
-    return history_data[indices[0][0]], distances[0][0]
+    distances, indices = temp_vectorstore.search(query_embedding, k=1)
+    return filtered_history[indices[0][0]], distances[0][0]
 
 def transcribe_audio_stream(audio_generator):
     credentials = service_account.Credentials.from_service_account_file('sa-speech-history-browser.json')
@@ -132,6 +144,131 @@ def transcribe_audio_stream(audio_generator):
                 logging.info(f"Transcript: {result.alternatives[0].transcript}")
                 yield result.alternatives[0].transcript
 
+def classify_website(title, content):
+    prompt = f"""
+        Classify the website into one or more of the following categories: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home.
+
+        Title: {title}
+        Content: {content}
+
+        Output the categories as a array.
+
+        Example:
+        Title: Example Title
+        Content: Example content about a tech and productivity tool.
+        Output: ["tech", "productivity"]
+    """
+    
+    data = {
+        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    try:
+        response = requests.post(api_url, headers=headers, json=data)
+        response.raise_for_status()  
+        result = response.json()
+        
+        if "choices" in result and "message" in result["choices"][0]:
+            content = result["choices"][0]["message"]["content"]
+            match = re.search(r'\[.*?\]', content)
+            if match:
+                categories = match.group(0)
+                result = json.loads(categories)
+                valid_categories = []
+                for category in result:
+                    if category in ["entertainment", "music", "news", "social media", "education", "tech", "health", "shopping", "finance", "travel", "productivity", "forums", "sports", "food", "science", "home"]:
+                        valid_categories.append(category)
+                    else:
+                        logging.error("Invalid category: %s", category)
+                if valid_categories:
+                    return valid_categories
+                else:
+                    return ["other"]
+        else:
+            logging.error("Unexpected API response format.")
+            return ["other"]
+
+    except requests.exceptions.HTTPError as err:
+        print(f"HTTP error occurred: {err}")
+    except requests.exceptions.RequestException as err:
+        print(f"Error occurred: {err}")
+    except KeyError as err:
+        print(f"KeyError: {err} in API response")
+    except json.JSONDecodeError as err:
+        print(f"JSONDecodeError: {err} in API response")
+    
+    return ["other"]
+
+def extract_features(input_text):
+    prompt = f"""
+        Extract the following features from the text provided, returning only the output in JSON format:
+
+        1. **time** - Look for references to times or events that may indicate when the action or request occurred, such as "yesterday at 7 PM" or "3 days ago." Normalize the time to obtain `start_date` and `end_date` in a standard format to support time constraints. 
+
+        - For example, if the text includes "2 days ago," calculate `start_date` as two days before today’s date (today is 31/10/2024): 
+            - `start_date`: 00:00 on 29/10/2024
+            - `end_date`: 23:59 on 29/10/2024.
+        
+        - If the text specifies a time, like "today at 8 PM," convert to an hour range around the specified time:
+            - `start_date`: 19:00 on 31/10/2024
+            - `end_date`: 21:00 on 31/10/2024.
+
+        2. **title** - Identify any references to topics or main themes, especially if they are phrases that start with or include "related to" or "main topic." For example, "related to food," "main theme about travel."
+
+        3. **color** - Detect references to primary or dominant colors mentioned in the text, such as "yellow," "blue," or "green."
+
+        4. **content** - Extract the main content or focus area of the text, often appearing after phrases like "main content about" or "content regarding." For example, "main content about Vietnamese bun cha dish."
+
+        5. **category** - Classify the website into one of the following categories: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home.
+
+        Example Input: "Tìm cho tôi 1 website tôi có truy cập vào 7h tối qua, web này có tiêu đề liên quan đến ẩm thực và màu chủ đạo là màu vàng, nội dung chính về món ăn bún chả Việt Nam."
+
+        Expected JSON Output:
+        {{
+        "time": {{
+            "original": "7h tối qua",
+            "value": "2024-10-30T19:00:00",
+            "start_date": "2024-10-30T18:00:00",
+            "end_date": "2024-10-30T20:00:00"
+        }},
+        "title": "liên quan đến ẩm thực",
+        "color": "màu vàng",
+        "content": "món ăn bún chả Việt Nam",
+        "category": "food"
+        }}
+
+        Text to Analyze: "{input_text}"
+
+        Output JSON Only:
+        """
+        
+    data = {
+        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    try:
+        response = requests.post(api_url, headers=headers, json=data)
+        response.raise_for_status()  
+        result = response.json()
+        
+        if "choices" in result and "message" in result["choices"][0]:
+            content = result["choices"][0]["message"]["content"]
+            return content
+        else:
+            print("Unexpected API response format.")
+            return None
+
+    except requests.exceptions.HTTPError as err:
+        print(f"HTTP error occurred: {err}")
+    except requests.exceptions.RequestException as err:
+        print(f"Error occurred: {err}")
+    except KeyError as err:
+        print(f"KeyError: {err} in API response")
+    except json.JSONDecodeError as err:
+        print(f"JSONDecodeError: {err} in API response")
+    
+    return None
+
 # Function to check if a question is within the scope of the website titles
 def is_question_within_scope(question):
     # Craft the prompt
@@ -147,9 +284,6 @@ def is_question_within_scope(question):
         response = requests.post(api_url, headers=headers, json=data)
         response.raise_for_status()  
         result = response.json()
-        
-        # Print the full response for debugging
-        print("API Response:", result)
         
         # Check if the expected fields are in the response
         if "choices" in result and "message" in result["choices"][0]:
@@ -203,7 +337,6 @@ def search(query):
     distances, indices = vectorstore.search(query_embedding, k=1)
     return history_data[indices[0][0]], distances[0][0]
 
-
 # API Chatbot
 @app.route('/chatbot', methods=['POST'])
 def chatbot():
@@ -211,18 +344,47 @@ def chatbot():
     logging.info("Received user message: %s", user_message)
     
     is_within_scope, relevant_title = is_question_within_scope(user_message)
-    logging.info("Is question within scope: %s", is_within_scope)
 
     if is_within_scope:
-        result, similarity, entities = semantic_search_with_ner(user_message)
-        if result:
-            response = (f"Câu tiêu đề liên quan nhất: {result['title']} (Độ tương đồng: {similarity:.2f}). "
-                        f"URL: {result['url']}. Từ khóa: {entities}")
+        features_response = extract_features(user_message)
+        logging.info("Extracted features response: %s", features_response)
+
+        features = extract_json_from_response(features_response)
+        logging.info("Extracted features: %s", features)
+
+        if features:
+            filtered_history = history_data
+            # Thời gian 
+            if 'time' in features:
+                search_time = datetime.strptime(features['time']['value'], "%Y-%m-%dT%H:%M:%S")
+                start_time = datetime.strptime(features['time']['start_date'], "%Y-%m-%dT%H:%M:%S")
+                end_time = datetime.strptime(features['time']['end_date'], "%Y-%m-%dT%H:%M:%S")
+
+                filtered_history = [item for item in history_data if start_time.timestamp() <= item['lastVisitTime'] / 1000 <= end_time.timestamp()]
+
+            # Tiêu đề liên quan nhất
+            if 'title' in features:
+                title_content = features['title']
+                temp_vectorstore = create_temp_vectorstore(filtered_history)
+                result, similarity = semantic_search(title_content, temp_vectorstore, filtered_history)
+
+                if result:
+                    response = (f"Câu tiêu đề liên quan nhất: {result['title']} (Độ tương đồng: {similarity:.2f}). "
+                                f"URL: {result['url']}. Từ khóa: {features}")
+                else:
+                    response = "Không tìm thấy tiêu đề liên quan."
+
+            # Nội dung liên quan nhất
+            if 'content' in features:
+                content = features['content']
+
+            # Màu sắc liên quan nhất
+            if 'color' in features:
+                color = features['color']
         else:
             response = "Không tìm thấy tiêu đề liên quan."
     else:
         response = "Câu hỏi này không liên quan đến tiêu đề website."
-    
     return jsonify({'response': response})
 
 @sockets.route('/transcribe_stream')
@@ -250,9 +412,24 @@ def transcribe_socket(ws):
     for transcript in transcribe_audio_stream(audio_generator()):
         ws.send(json.dumps({"transcription": transcript}))
 
-def save_history_to_json(history_data):
-    with open('history_data.json', 'w', encoding='utf-8') as f:
-        json.dump(history_data, f, ensure_ascii=False, indent=4)
+def save_history_to_json(new_history_data):
+    file_path = 'history_data.json'
+    if os.path.exists(file_path):
+        # Đọc dữ liệu hiện có từ file
+        with open(file_path, 'r', encoding='utf-8') as f:
+            try:
+                existing_data = json.load(f)
+            except json.JSONDecodeError:
+                existing_data = []
+    else:
+        existing_data = []
+
+    # Kết hợp dữ liệu hiện có với dữ liệu mới
+    combined_data = existing_data + new_history_data
+
+    # Lưu dữ liệu kết hợp trở lại file
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(combined_data, f, ensure_ascii=False, indent=4)
     logging.info("History data saved to history_data.json")
 
 @app.route('/upload_history', methods=['POST'])
@@ -265,6 +442,15 @@ def upload_history():
     except ValueError as e:
         logging.error("Validation error: %s", e)
         return jsonify({'status': 'error', 'message': str(e)}), 400
+
+    # Crawl nội dung từ các trang web trong lịch sử
+    for item in new_history_data:
+        content = crawl_website_content(item['url'])
+        item['content'] = content
+
+        # Phân loại website dựa trên nội dung và tiêu đề
+        categories = classify_website(item['title'], content)
+        item['categories'] = categories
 
     # Lọc dữ liệu lịch sử để loại bỏ các URL và tiêu đề trùng lặp
     new_history_data = filterDuplicateHistory(new_history_data)
