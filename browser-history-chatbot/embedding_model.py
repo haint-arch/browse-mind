@@ -2,7 +2,8 @@ import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sockets import Sockets
-from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM, AutoTokenizer, AutoModelForTokenClassification, pipeline
+from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM, AutoTokenizer, AutoModelForTokenClassification, \
+    pipeline
 from urllib.parse import urlparse, parse_qs, urlunparse
 import torch
 import faiss
@@ -61,12 +62,16 @@ semantic_model_name = 'bkai-foundation-models/vietnamese-bi-encoder'
 semantic_tokenizer = AutoTokenizer.from_pretrained(semantic_model_name)
 semantic_model = AutoModel.from_pretrained(semantic_model_name)
 
+
+# Methods for color extraction
 def rgb_to_hex(rgb):
     return '#{:02x}{:02x}{:02x}'.format(rgb[0], rgb[1], rgb[2])
 
+
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
-    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+
 
 def parse_color(color):
     if not color or not isinstance(color, str):
@@ -74,15 +79,15 @@ def parse_color(color):
     color = color.strip()
     if not color:
         return None
-    
+
     try:
         if color.startswith('#'):
             hex_color = color.lstrip('#')
             if len(hex_color) == 3:  # Convert #RGB to #RRGGBB
                 hex_color = ''.join(c + c for c in hex_color)
-            if not hex_color:  # Handle empty hex string
-                return None
-            return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            if len(hex_color) != 6:  # Handle invalid hex string length
+                raise ValueError(f"Invalid hex color length: {hex_color}")
+            return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
         elif color.startswith('rgb'):
             values = re.findall(r'\d+', color)
             if len(values) == 3:
@@ -94,12 +99,16 @@ def parse_color(color):
                 'red': (255, 0, 0),
                 'green': (0, 255, 0),
                 'blue': (0, 0, 255),
+                'yellow': (255, 255, 0),
+                'cyan': (0, 255, 255),
+                'magenta': (255, 0, 255),
             }
             return color_map.get(color.lower())
     except (ValueError, IndexError) as e:
         logging.warning(f"Error parsing color '{color}': {str(e)}")
         return None
     return None
+
 
 def pool_colors(colors, threshold=20):
     pooled = []
@@ -112,21 +121,22 @@ def pool_colors(colors, threshold=20):
             pooled.append(color)
     return pooled
 
+
 def get_css_colors(url):
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         inline_styles = [tag.get('style', '') for tag in soup.find_all(style=True)]
         stylesheets = [link.get('href', '') for link in soup.find_all('link', rel='stylesheet')]
-        
+
         colors = []
-        
+
         for style in inline_styles:
             if style:
                 colors.extend(re.findall(r'#[0-9a-fA-F]{3,6}|rgb$$\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$$', style))
-        
+
         for stylesheet in stylesheets:
             if not stylesheet:
                 continue
@@ -139,17 +149,18 @@ def get_css_colors(url):
             except Exception as e:
                 logging.warning(f"Error fetching stylesheet {stylesheet}: {str(e)}")
                 continue
-        
+
         parsed_colors = []
         for color in colors:
             parsed = parse_color(color)
             if parsed:
                 parsed_colors.append(parsed)
-        
+
         return parsed_colors
     except Exception as e:
         logging.error(f"Error getting CSS colors from {url}: {str(e)}")
         return []
+
 
 def get_image_from_url(url):
     try:
@@ -160,6 +171,7 @@ def get_image_from_url(url):
         print(f"Error fetching image from {url}: {str(e)}")
         return None
 
+
 def get_dominant_color_from_image(image):
     if image is None:
         return None
@@ -167,18 +179,19 @@ def get_dominant_color_from_image(image):
         # Chuyển đổi hình ảnh sang định dạng RGB nếu cần
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        
+
         # Lưu hình ảnh tạm thời vào bộ nhớ
         img_byte_arr = BytesIO()
         image.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
-        
+
         # Sử dụng ColorThief để lấy màu chủ đạo
         color_thief = ColorThief(img_byte_arr)
         return color_thief.get_color(quality=1)
     except Exception as e:
         print(f"Error getting dominant color from image: {str(e)}")
         return None
+
 
 def get_dominant_color(url, default_color=(255, 255, 255)):
     try:
@@ -188,17 +201,17 @@ def get_dominant_color(url, default_color=(255, 255, 255)):
             pooled_css_colors = pool_colors([c for c in css_colors if c is not None])
             if pooled_css_colors:
                 css_color_counts = Counter(pooled_css_colors)
-                
+
                 # Try to get image color
                 try:
                     image = get_image_from_url(url)
                     image_color = get_dominant_color_from_image(image) if image else None
-                    
+
                     # Combine results
                     all_colors = list(css_color_counts.keys())
                     if image_color:
                         all_colors.append(image_color)
-                    
+
                     pooled_all_colors = pool_colors(all_colors)
                     if pooled_all_colors:
                         return Counter(pooled_all_colors).most_common(1)[0][0]
@@ -206,20 +219,22 @@ def get_dominant_color(url, default_color=(255, 255, 255)):
                     logging.warning(f"Error processing image from {url}: {str(e)}")
                     # Fall back to CSS colors only
                     return css_color_counts.most_common(1)[0][0]
-        
+
         # If no CSS colors found, try image only
         image = get_image_from_url(url)
         if image:
             image_color = get_dominant_color_from_image(image)
             if image_color:
                 return image_color
-        
+
         logging.warning(f"No colors found for {url}, using default color")
         return default_color
     except Exception as e:
         logging.error(f"Error processing {url}: {str(e)}")
         return default_color
 
+
+# Methods for website content extraction
 def crawl_website_content(url):
     try:
         response = requests.get(url, headers=HEADERS)
@@ -231,7 +246,7 @@ def crawl_website_content(url):
         if not main_content:
             logging.warning("No main content found in URL: %s", url)
             return None, []
-        
+
         summary = extract_summary(main_content)
         if not summary:
             logging.warning("Failed to extract summary from URL: %s", url)
@@ -242,6 +257,7 @@ def crawl_website_content(url):
     except requests.exceptions.RequestException as e:
         logging.error(f"Không thể truy cập URL {url}. Lỗi: {e}")
         return None, []
+
 
 def extract_json_from_response(response_text):
     # Sử dụng biểu thức chính quy để trích xuất nội dung JSON từ chuỗi văn bản
@@ -255,6 +271,8 @@ def extract_json_from_response(response_text):
             return None
     return None
 
+
+# Methods for semantic search
 def normalize_url(url):
     parsed_url = urlparse(url)
     query_params = parse_qs(parsed_url.query)
@@ -263,6 +281,7 @@ def normalize_url(url):
         normalized_url = urlunparse(parsed_url._replace(query=normalized_query))
         return normalized_url
     return url
+
 
 def filterDuplicateHistory(historyItems):
     uniqueHistory = []
@@ -277,27 +296,27 @@ def filterDuplicateHistory(historyItems):
             seenTitles.add(item['title'])
     return uniqueHistory
 
+
 def get_normalized_embeddings(sentences, max_length=128):
+    if not sentences:
+        raise ValueError("The input sentences list is empty.")
     inputs = semantic_tokenizer(sentences, return_tensors='pt', padding=True, truncation=True, max_length=max_length)
     with torch.no_grad():
         embeddings = semantic_model(**inputs).pooler_output
     norms = torch.norm(embeddings, dim=1, keepdim=True)
     return (embeddings / norms).cpu().numpy()
 
-def semantic_search(user_input, title_vectorstore, content_vectorstore, filtered_history):
-    query_embedding = get_normalized_embeddings([user_input])
-    
-    title_distances, title_indices = title_vectorstore.search(query_embedding, k=1)
-    content_distances, content_indices = content_vectorstore.search(query_embedding, k=1)
 
-    title_result = filtered_history[title_indices[0][0]]
-    content_result = filtered_history[content_indices[0][0]]
+def semantic_search(query_embedding, vectorstore, filtered_history, k=1):
+    distances, indices = vectorstore.search(query_embedding, k=k)
+    results = [
+        (filtered_history[i], float(distances[0][j]))
+        for j, i in enumerate(indices[0])
+    ]
+    return results
 
-    title_similarity = float(title_distances[0][0])
-    content_similarity = float(content_distances[0][0])
 
-    return title_result, title_similarity, content_result, content_similarity
-
+# Methods for audio transcription
 def transcribe_audio_stream(audio_generator):
     credentials = service_account.Credentials.from_service_account_file('sa-speech-history-browser.json')
     client = speech.SpeechClient(credentials=credentials)
@@ -322,6 +341,8 @@ def transcribe_audio_stream(audio_generator):
                 logging.info(f"Transcript: {result.alternatives[0].transcript}")
                 yield result.alternatives[0].transcript
 
+
+# Methods for prompt-based API calls
 def extract_summary(input_text):
     prompt = f"""
         Summarize the following content in vietnamese:
@@ -330,16 +351,16 @@ def extract_summary(input_text):
 
         Output the result only.
         """
-        
+
     data = {
         "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
         "messages": [{"role": "user", "content": prompt}]
     }
     try:
         response = requests.post(api_url, headers=headers, json=data)
-        response.raise_for_status()  
+        response.raise_for_status()
         result = response.json()
-        
+
         if "choices" in result and "message" in result["choices"][0]:
             content = result["choices"][0]["message"]["content"]
             return content.strip()
@@ -355,8 +376,9 @@ def extract_summary(input_text):
         logging.error(f"KeyError: {err} in API response")
     except json.JSONDecodeError as err:
         logging.error(f"JSONDecodeError: {err} in API response")
-    
+
     return None
+
 
 def classify_website(title, content):
     prompt = f"""
@@ -372,16 +394,16 @@ def classify_website(title, content):
         Content: Example content about a tech and productivity tool.
         Output: ["tech", "productivity"]
     """
-    
+
     data = {
         "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
         "messages": [{"role": "user", "content": prompt}]
     }
     try:
         response = requests.post(api_url, headers=headers, json=data)
-        response.raise_for_status()  
+        response.raise_for_status()
         result = response.json()
-        
+
         if "choices" in result and "message" in result["choices"][0]:
             content = result["choices"][0]["message"]["content"]
             match = re.search(r'\[.*?\]', content)
@@ -390,7 +412,9 @@ def classify_website(title, content):
                 result = json.loads(categories)
                 valid_categories = []
                 for category in result:
-                    if category in ["entertainment", "music", "news", "social media", "education", "tech", "health", "shopping", "finance", "travel", "productivity", "forums", "sports", "food", "science", "home"]:
+                    if category in ["entertainment", "music", "news", "social media", "education", "tech", "health",
+                                    "shopping", "finance", "travel", "productivity", "forums", "sports", "food",
+                                    "science", "home"]:
                         valid_categories.append(category)
                     else:
                         logging.error("Invalid category: %s", category)
@@ -410,8 +434,9 @@ def classify_website(title, content):
         print(f"KeyError: {err} in API response")
     except json.JSONDecodeError as err:
         print(f"JSONDecodeError: {err} in API response")
-    
+
     return ["other"]
+
 
 def extract_features(input_text):
     prompt = f"""
@@ -429,7 +454,7 @@ def extract_features(input_text):
 
         2. **title** - Identify any references to topics or main themes, especially if they are phrases that start with or include "related to" or "main topic." For example, "related to food," "main theme about travel."
 
-        3. **color** - Detect references to primary or dominant colors mentioned in the text, such as "yellow," "blue," or "green."
+        3. **color** - Detect references to primary or dominant colors mentioned in the text, such as "yellow," "blue," or "green." Return the color in RGB format.
 
         4. **content** - Extract the main content or focus area of the text, often appearing after phrases like "main content about" or "content regarding." For example, "main content about Vietnamese bun cha dish."
 
@@ -446,7 +471,7 @@ def extract_features(input_text):
             "end_date": "2024-10-30T20:00:00"
         }},
         "title": "liên quan đến ẩm thực",
-        "color": "màu vàng",
+        "color": [255, 255, 0],
         "content": "món ăn bún chả Việt Nam",
         "category": "food"
         }}
@@ -455,16 +480,16 @@ def extract_features(input_text):
 
         Output JSON Only:
         """
-        
+
     data = {
         "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
         "messages": [{"role": "user", "content": prompt}]
     }
     try:
         response = requests.post(api_url, headers=headers, json=data)
-        response.raise_for_status()  
+        response.raise_for_status()
         result = response.json()
-        
+
         if "choices" in result and "message" in result["choices"][0]:
             content = result["choices"][0]["message"]["content"]
             return content
@@ -480,29 +505,29 @@ def extract_features(input_text):
         print(f"KeyError: {err} in API response")
     except json.JSONDecodeError as err:
         print(f"JSONDecodeError: {err} in API response")
-    
+
     return None
 
-# Function to check if a question is within the scope of the website titles
+
 def is_question_within_scope(question):
     # Craft the prompt
     prompt = f"Is the following question within the scope of browser history search?\n\nQuestion: {question}\n\nAnswer with 'yes' or 'no'."
-    
+
     # Prepare the payload for the API request
     data = {
         "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
         "messages": [{"role": "user", "content": prompt}]
     }
-    
+
     try:
         response = requests.post(api_url, headers=headers, json=data)
-        response.raise_for_status()  
+        response.raise_for_status()
         result = response.json()
-        
+
         # Check if the expected fields are in the response
         if "choices" in result and "message" in result["choices"][0]:
             content = result["choices"][0]["message"]["content"]
-            if "Yes" in content or "yes" in content:	
+            if "Yes" in content or "yes" in content:
                 return True, content
             elif "No" in content or "no" in content:
                 return False, content
@@ -516,47 +541,50 @@ def is_question_within_scope(question):
         print(f"Error occurred: {err}")
     except KeyError as err:
         print(f"KeyError: {err} in API response")
-    
+
     return False, "API request failed."
+
 
 # Ensure data is a list of dictionaries with 'title' and 'url'
 def validate_history_data(data):
-    if not isinstance(data, list) or not all(isinstance(item, dict) and 'title' in item and 'url' in item for item in data):
+    if not isinstance(data, list) or not all(
+            isinstance(item, dict) and 'title' in item and 'url' in item for item in data):
         raise ValueError("Data must be a list of dictionaries with 'title' and 'url'")
 
-# Function to compute and cache embeddings for history_data
-def compute_history_embeddings():
-    global vectorstore
-    titles = [item['title'] for item in history_data]
-    embeddings = get_normalized_embeddings(titles)
-    vectorstore = faiss.IndexFlatIP(embeddings.shape[1])
-    vectorstore.add(embeddings)
-    logging.info("Embeddings for history data computed and stored in vectorstore.")
 
-# Function to search for the most similar response
-def search(query):
-    logging.info("Searching for: %s with history length: %d", query, len(history_data))
-    if not history_data:
-        return None, 0.0
+# Methods for calculating scores
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-    validate_history_data(history_data)
 
-    if vectorstore is None:
-        logging.info("Vectorstore is not initialized. Computing embeddings for history data.")
-        compute_history_embeddings()
+def calculate_time_score(query_time, page_time, max_time_diff):
+    time_diff = abs(query_time - page_time)
+    return 1 - (time_diff / max_time_diff)
 
-    query_embedding = get_normalized_embeddings([query])
 
-    logging.info("Searching for the most similar response.")
-    distances, indices = vectorstore.search(query_embedding, k=1)
-    return history_data[indices[0][0]], distances[0][0]
+def calculate_color_score(query_color, page_color):
+    if not query_color or not page_color:
+        return 0
+    distance = np.sqrt(sum((a - b) ** 2 for a, b in zip(query_color, page_color)))
+    max_distance = np.sqrt(3 * (255 ** 2))
+    return 1 - (distance / max_distance)
+
+
+def calculate_category_score(query_category, page_categories):
+    return 1 if query_category in page_categories else 0
+
+
+def calculate_total_score(title_score, content_score, time_score, color_score, category_score):
+    return (0.4 * title_score) + (0.4 * content_score) + (0.1 * time_score) + (0.05 * color_score) + (
+            0.05 * category_score)
+
 
 # API Chatbot
 @app.route('/chatbot', methods=['POST'])
 def chatbot():
     user_message = request.json.get('query', '')
     logging.info("Received user message: %s", user_message)
-    
+
     is_within_scope, relevant_title = is_question_within_scope(user_message)
 
     if is_within_scope:
@@ -564,55 +592,104 @@ def chatbot():
         logging.info("Extracted features response: %s", features_response)
 
         features = extract_json_from_response(features_response)
-        logging.info("Extracted features: %s", features)
-
         if features:
-            filtered_history = history_data
-            response = {}
+            query_embedding = get_normalized_embeddings([user_message])
 
-            if title_vectorstore is None or content_vectorstore is None:
-                return jsonify({"error": "Failed to create temporary vectorstores"}), 500
+            # Use both title and content vectorstore
+            title_results = []
+            content_results = []
+            color_results = []
+            time_results = []
 
-            # Xử lý thời gian
-            if 'time' in features and features['time']['value'] != "0000-00-00T00:00:00"  and features['time']['value'] != "null" and features['time']['value'] != "":
-                search_time = datetime.strptime(features['time']['value'], "%Y-%m-%dT%H:%M:%S")
-                start_time = datetime.strptime(features['time']['start_date'], "%Y-%m-%dT%H:%M:%S")
-                end_time = datetime.strptime(features['time']['end_date'], "%Y-%m-%dT%H:%M:%S")
+            if 'title' in features and features['title']:
+                title_results = semantic_search(query_embedding, title_vectorstore, history_data)
 
-                filtered_history = [item for item in history_data if start_time.timestamp() <= item['lastVisitTime'] / 1000 <= end_time.timestamp()]
+            if 'content' in features and features['content']:
+                content_results = semantic_search(query_embedding, content_vectorstore, history_data)
 
-            # Xử lý tiêu đề
-            if 'title' in features:
-                title_content = features['title']
-                title_result, title_similarity, _, _ = semantic_search(
-                    title_content, title_vectorstore, content_vectorstore, history_data
-                )
-                if not title_result:
-                    return jsonify({"error": "No relevant title found"}), 404
+            if 'color' in features and features['color']:
+                for item in history_data:
+                    if 'color' in item:
+                        color_score = calculate_color_score(features['color'], item['color'])
+                        if color_score > 0:
+                            color_results.append((item, color_score))
 
-                response['title_result'] = title_result
-                response['title_similarity'] = title_similarity
+            if 'time' in features and features['time']['value']:
+                query_time = datetime.strptime(features['time']['value'], "%Y-%m-%dT%H:%M:%S").timestamp()
+                for item in history_data:
+                    if 'lastVisitTime' in item:
+                        page_time = item['lastVisitTime'] / 1000  # Convert milliseconds to seconds
+                        max_time_diff = 30 * 24 * 60 * 60  # 30 days in seconds
+                        time_score = calculate_time_score(query_time, page_time, max_time_diff)
+                        if time_score > 0:
+                            time_results.append((item, time_score))
 
-            # Xử lý nội dung
-            if 'content' in features:
-                content = features['content']
-                _, _, content_result, content_similarity = semantic_search(
-                    content, title_vectorstore, content_vectorstore, history_data
-                )
-                response['content_result'] = content_result
-                response['content_similarity'] = content_similarity
+            # Combine and deduplicate results
+            combined_results = {}
+            for item, score in title_results + content_results + color_results + time_results:
+                if item['url'] not in combined_results:
+                    combined_results[item['url']] = {'item': item, 'score': score}
+                else:
+                    combined_results[item['url']]['score'] = max(combined_results[item['url']]['score'], score)
 
-            # Xử lý màu sắc
-            if 'color' in features:
-                color = features['color']
+            scores = []
+            for url, data in combined_results.items():
+                item = data['item']
+                base_score = data['score']
 
-            return response
+                time_score = 0
+                if 'time' in features and features['time']['value'] and features['time'][
+                    'value'] != "0000-00-00T00:00:00" and features['time']['value'] != "null" and features['time'][
+                    'value'] != "":
+                    query_time = datetime.strptime(features['time']['value'], "%Y-%m-%dT%H:%M:%S").timestamp()
+                    page_time = item['lastVisitTime'] / 1000  # Convert milliseconds to seconds
+                    max_time_diff = 30 * 24 * 60 * 60  # 30 days in seconds
+                    time_score = calculate_time_score(query_time, page_time, max_time_diff)
+
+                color_score = 0
+                if 'color' in features and features['color'] and 'color' in item:
+                    query_color = features['color']
+                    page_color = item.get('color')
+                    if isinstance(query_color, list) and len(query_color) == 3:
+                        color_score = calculate_color_score(query_color, page_color)
+                    else:
+                        parsed_color = parse_color(query_color)
+                        if parsed_color:
+                            color_score = calculate_color_score(parsed_color, page_color)
+
+                category_score = 0
+                if 'category' in features and 'categories' in item:
+                    category_score = calculate_category_score(features['category'], item['categories'])
+
+                total_score = calculate_total_score(base_score, base_score, time_score, color_score, category_score)
+                scores.append((item, total_score))
+
+            # Sort the results by score in descending order
+            sorted_results = sorted(scores, key=lambda x: x[1], reverse=True)
+
+            # Return the top 3 results
+            if sorted_results:
+                top_3_results = sorted_results[:3]
+                response = []
+                for match, score in top_3_results:
+                    logging.info("Match: %s, score: %f", match['title'], score)
+                    response.append({
+                        'url': match['url'],
+                        'title': match['title'],
+                        'score': score,
+                        'color': match.get('color'),
+                        'categories': match.get('categories', []),
+                        'lastVisitTime': match['lastVisitTime']
+                    })
+                response = sorted(response, key=lambda x: x['score'], reverse=True)
+                print('Response:', response)
+                return jsonify({'response': response})
+            else:
+                return jsonify({'response': "Không tìm thấy tiêu đề liên quan."})
         else:
-            response = "Không tìm thấy tiêu đề liên quan."
+            return jsonify({'response': "Không tìm thấy tiêu đề liên quan."})
     else:
-        response = "Câu hỏi này không liên quan đến tiêu đề website."
-
-    return jsonify({"error": "No relevant history found"}), 404
+        return jsonify({'response': "Câu hỏi này không liên quan đến tiêu đề website."})
 
 @sockets.route('/transcribe_stream')
 def transcribe_socket(ws):
@@ -639,6 +716,7 @@ def transcribe_socket(ws):
     for transcript in transcribe_audio_stream(audio_generator()):
         ws.send(json.dumps({"transcription": transcript}))
 
+
 def save_history_to_json(new_history_data):
     file_path = 'history_data.json'
     if os.path.exists(file_path):
@@ -659,30 +737,15 @@ def save_history_to_json(new_history_data):
         json.dump(combined_data, f, ensure_ascii=False, indent=4)
     logging.info("History data saved to history_data.json")
 
+
 @app.route('/upload_history', methods=['POST'])
 def upload_history():
     global history_data, title_vectorstore, content_vectorstore
-
-    # ---- Comment from here ------
-    # file_path = 'history_data.json'
-    
-    # # Đọc dữ liệu từ file history_data.json
-    # if os.path.exists(file_path):
-    #     with open(file_path, 'r', encoding='utf-8') as f:
-    #         try:
-    #             new_history_data = json.load(f)
-    #         except json.JSONDecodeError as e:
-    #             logging.error("JSON decode error: %s", e)
-    #             return jsonify({'status': 'error', 'message': 'Failed to decode JSON from history_data.json'}), 500
-    # else:
-    #     logging.error("File history_data.json not found.")
-    #     return jsonify({'status': 'error', 'message': 'File history_data.json not found'}), 404
-    
     new_history_data = request.json.get('history', [])[:10]
-    
+
     try:
         validate_history_data(new_history_data)
-    except ValueError as e: 
+    except ValueError as e:
         logging.error("Validation error: %s", e)
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
@@ -707,39 +770,44 @@ def upload_history():
 
     # Lọc dữ liệu lịch sử để loại bỏ các URL và tiêu đề trùng lặp
     new_history_data = filterDuplicateHistory(new_history_data)
-    
+
     # Append new history data to existing history_data
     history_data.extend(new_history_data)
 
     # Save history data to JSON file
     save_history_to_json(history_data)
-    
+
     # Compute embeddings for new history data and add to vectorstore
     new_titles = [item['title'] for item in new_history_data]
     new_contents = [" ".join(item['content']) for item in new_history_data if 'content' in item]
-    
+
     logging.info("New history data uploaded: %d items", len(new_titles))
 
-    # Check if new_titles or new_contents is empty
-    if not new_titles or not new_contents:
-        logging.warning("No new titles or contents to embed.")
-        return jsonify({'status': 'success', 'message': 'No new titles or contents to embed.'})
+    # Check if new_titles is empty
+    if not new_titles:
+        print("No new titles to embed.")
+        return jsonify({'status': 'success', 'message': 'No new titles to embed.'})
 
     new_title_embeddings = get_normalized_embeddings(new_titles)
-    new_content_embeddings = get_normalized_embeddings(new_contents)
-
     if not title_vectorstore:
         title_vectorstore = faiss.IndexFlatIP(new_title_embeddings.shape[1])
     title_vectorstore.add(new_title_embeddings)
 
+    # Check if new_contents is empty
+    if not new_contents:
+        print("No new contents to embed.")
+        return jsonify({'status': 'success', 'message': 'No new contents to embed.'})
+
+    new_content_embeddings = get_normalized_embeddings(new_contents)
     if not content_vectorstore:
         content_vectorstore = faiss.IndexFlatIP(new_content_embeddings.shape[1])
     content_vectorstore.add(new_content_embeddings)
 
     logging.info("New history data uploaded and embeddings computed.")
-    
+
     return jsonify({'status': 'success'})
-    
+
+
 if __name__ == '__main__':
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler

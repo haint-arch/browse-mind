@@ -123,19 +123,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadRecentChat();
-    initializeHistory()
+    initializeHistory();
 
     function loadRecentChat() {
         const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
         if (recentChat.question) chatInput.value = recentChat.question;
-        if (recentChat.response) {
+        if (recentChat.response && Array.isArray(recentChat.response)) {
             const messageElement = createResponseElement(recentChat.response);
             chatResponse.appendChild(messageElement);
         }
-        if (recentChat.question || recentChat.response) {
+        if (recentChat.question || (recentChat.response && recentChat.response.length > 0)) {
             chatInput.value = '';
             assistantHeader.style.height = '';
-            headerH2.remove();
+            if (headerH2) headerH2.remove();
         }
     }
 
@@ -143,31 +143,29 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('recentChat', JSON.stringify({ question, response }));
     }
 
-    function createResponseElement(responseText) {
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('response-message');
+    function createResponseElement(responses) {
+        const containerElement = document.createElement('div');
+        containerElement.classList.add('responses-container');
 
-        const regex = /Câu tiêu đề liên quan nhất: (.+) \(Độ tương đồng: (.+)\)\. URL: (.+)/;
-        const match = responseText.match(regex);
-
-        if (match) {
-            const [_, title, similarity, url] = match;
+        responses.forEach((response, index) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('response-message');
 
             const titleElement = document.createElement('a');
-            titleElement.href = url;
-            titleElement.textContent = title;
+            titleElement.href = response.url;
+            titleElement.textContent = `${index + 1}. ${response.title}`;
             titleElement.target = '_blank';
             messageElement.appendChild(titleElement);
 
             const similarityElement = document.createElement('div');
-            similarityElement.textContent = `Độ tương đồng: ${similarity}`;
+            similarityElement.textContent = `Độ tương đồng: ${response.score.toFixed(4)}`;
             similarityElement.classList.add('similarity');
             messageElement.appendChild(similarityElement);
-        } else {
-            messageElement.textContent = responseText;
-        }
 
-        return messageElement;
+            containerElement.appendChild(messageElement);
+        });
+
+        return containerElement;
     }
 
     async function sendMessage() {
@@ -193,17 +191,45 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const data = await response.json();
-            const messageElement = createResponseElement(data.response);
-            chatResponse.appendChild(messageElement);
+            console.log('Chatbot response:', data);
 
-            saveRecentChat(message, data.response);
+            if (typeof data.response === 'string') {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('response-message');
+                messageElement.textContent = data.response;
+                chatResponse.appendChild(messageElement);
+            } else if (Array.isArray(data.response) && data.response.length > 0) {
+                data.response.forEach(item => {
+                    const messageElement = document.createElement('div');
+                    messageElement.classList.add('response-message');
 
-            const recentChat = JSON.parse(localStorage.getItem('recentChat'));
-            if (recentChat) {
-                assistantHeader.removeChild(loadingElement);
-                assistantHeader.style.height = '';
-                chatInput.value = '';
+                    const titleElement = document.createElement('a');
+                    titleElement.href = item.url;
+                    titleElement.textContent = item.title;
+                    titleElement.target = '_blank';
+                    messageElement.appendChild(titleElement);
+
+                    const scoreElement = document.createElement('div');
+                    scoreElement.classList.add('similarity');
+                    scoreElement.textContent = `Score: ${item.score.toFixed(2)}`;
+                    messageElement.appendChild(scoreElement);
+
+                    const categoriesElement = document.createElement('div');
+                    categoriesElement.classList.add('similarity');
+                    categoriesElement.textContent = `Categories: ${item.categories.join(', ')}`;
+                    messageElement.appendChild(categoriesElement);
+
+                    chatResponse.appendChild(messageElement);
+                });
+
+                saveRecentChat(message, data.response);
+            } else {
+                throw new Error('Unexpected response format');
             }
+
+            assistantHeader.removeChild(loadingElement);
+            assistantHeader.style.height = '';
+            chatInput.value = '';
         } catch (error) {
             console.error('Error communicating with the chatbot:', error);
             const errorElement = document.createElement('div');

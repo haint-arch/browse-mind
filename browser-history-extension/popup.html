@@ -47,6 +47,7 @@
       .assistant-body {
         flex: 1;
         overflow-y: auto;
+        padding: 10px;
       }
 
       .assistant-footer {
@@ -93,11 +94,17 @@
         animation: spin 1s linear infinite;
       }
 
+      .responses-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
       .response-message {
         background-color: #f1f1f1;
         border-radius: 5px;
         padding: 10px;
-        margin: 10px;
+        margin-bottom: 10px;
         font-size: 14px;
         color: #333;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -107,6 +114,7 @@
         color: #4caf50;
         text-decoration: none;
         word-break: break-all;
+        font-weight: bold;
       }
 
       .response-message a:hover {
@@ -117,6 +125,7 @@
         font-style: italic;
         color: #888;
         margin-top: 5px;
+        font-size: 12px;
       }
 
       #chatInputContainer {
@@ -180,7 +189,6 @@
     </style>
   </head>
   <body>
-    <!-- <button id="historyButton">Open History</button> -->
     <div class="container">
       <div class="assistant-header" id="assistantHeader">
         <div>
