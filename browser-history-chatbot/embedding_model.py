@@ -284,6 +284,9 @@ def normalize_url(url):
 
 
 def filterDuplicateHistory(historyItems):
+    """
+    Lọc các URL hoặc tiêu đề trùng lặp từ lịch sử duyệt web.
+    """
     uniqueHistory = []
     seenUrls = set()
     seenTitles = set()
@@ -545,13 +548,6 @@ def is_question_within_scope(question):
     return False, "API request failed."
 
 
-# Ensure data is a list of dictionaries with 'title' and 'url'
-def validate_history_data(data):
-    if not isinstance(data, list) or not all(
-            isinstance(item, dict) and 'title' in item and 'url' in item for item in data):
-        raise ValueError("Data must be a list of dictionaries with 'title' and 'url'")
-
-
 # Methods for calculating scores
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
@@ -691,6 +687,7 @@ def chatbot():
     else:
         return jsonify({'response': "Câu hỏi này không liên quan đến tiêu đề website."})
 
+
 @sockets.route('/transcribe_stream')
 def transcribe_socket(ws):
     audio_queue = queue.Queue()
@@ -740,24 +737,34 @@ def save_history_to_json(new_history_data):
 
 @app.route('/upload_history', methods=['POST'])
 def upload_history():
+    """
+    API xử lý embedding các mục chưa được xử lý và trả về danh sách ID đã xử lý.
+    """
     global history_data, title_vectorstore, content_vectorstore
+
     new_history_data = request.json.get('history', [])[:10]
+    logging.info("Received %d new history items", len(new_history_data))
+    if not new_history_data:
+        return jsonify({'status': 'error', 'message': 'Empty history data'}), 400
 
-    try:
-        validate_history_data(new_history_data)
-    except ValueError as e:
-        logging.error("Validation error: %s", e)
-        return jsonify({'status': 'error', 'message': str(e)}), 400
+    # Lọc bỏ trùng lặp trước khi xử lý
+    new_history_data = filterDuplicateHistory(new_history_data)
 
-    # Crawl nội dung từ các trang web trong lịch sử
+    processed_count = 0
     for item in new_history_data:
-        print(item['url'])
+        # Kiểm tra nếu mục đã được embedded
+        if item.get('is_embedded', True):
+            continue
+
+        # Crawl nội dung từ URL
         content, sentences = crawl_website_content(item['url'])
         if not content:
+            item['content'] = []
             logging.warning("Failed to crawl content from URL: %s", item['url'])
         else:
             item['content'] = sentences
 
+        # Lấy màu sắc chủ đạo từ URL
         color = get_dominant_color(item['url'])
         if not color:
             logging.warning("Failed to get dominant color from URL: %s", item['url'])
@@ -768,44 +775,33 @@ def upload_history():
         categories = classify_website(item['title'], content)
         item['categories'] = categories
 
-    # Lọc dữ liệu lịch sử để loại bỏ các URL và tiêu đề trùng lặp
-    new_history_data = filterDuplicateHistory(new_history_data)
+        # Tạo embeddings cho title và content
+        title_embedding = get_normalized_embeddings([item['title']])
+        content_embedding = get_normalized_embeddings([" ".join(item['content'])])
 
-    # Append new history data to existing history_data
-    history_data.extend(new_history_data)
+        # Thêm embeddings vào vectorstore
+        if title_vectorstore is None:
+            title_vectorstore = faiss.IndexFlatIP(title_embedding.shape[1])
+        title_vectorstore.add(title_embedding)
 
-    # Save history data to JSON file
-    save_history_to_json(history_data)
+        if content_vectorstore is None:
+            content_vectorstore = faiss.IndexFlatIP(content_embedding.shape[1])
+        content_vectorstore.add(content_embedding)
 
-    # Compute embeddings for new history data and add to vectorstore
-    new_titles = [item['title'] for item in new_history_data]
-    new_contents = [" ".join(item['content']) for item in new_history_data if 'content' in item]
+        # Đánh dấu mục này đã được embedded
+        item['is_embedded'] = True
+        processed_count += 1
 
-    logging.info("New history data uploaded: %d items", len(new_titles))
+    # Cập nhật lịch sử với các mục đã xử lý
+    for item in new_history_data:
+        existing_item = next((x for x in history_data if x['id'] == item['id']), None)
+        if existing_item:
+            existing_item.update(item)
+        else:
+            history_data.append(item)
 
-    # Check if new_titles is empty
-    if not new_titles:
-        print("No new titles to embed.")
-        return jsonify({'status': 'success', 'message': 'No new titles to embed.'})
-
-    new_title_embeddings = get_normalized_embeddings(new_titles)
-    if not title_vectorstore:
-        title_vectorstore = faiss.IndexFlatIP(new_title_embeddings.shape[1])
-    title_vectorstore.add(new_title_embeddings)
-
-    # Check if new_contents is empty
-    if not new_contents:
-        print("No new contents to embed.")
-        return jsonify({'status': 'success', 'message': 'No new contents to embed.'})
-
-    new_content_embeddings = get_normalized_embeddings(new_contents)
-    if not content_vectorstore:
-        content_vectorstore = faiss.IndexFlatIP(new_content_embeddings.shape[1])
-    content_vectorstore.add(new_content_embeddings)
-
-    logging.info("New history data uploaded and embeddings computed.")
-
-    return jsonify({'status': 'success'})
+    logging.info("Processed %d new history items", processed_count)
+    return jsonify({'status': 'success', 'history_data': new_history_data})
 
 
 if __name__ == '__main__':

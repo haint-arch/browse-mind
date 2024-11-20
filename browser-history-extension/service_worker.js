@@ -25,32 +25,64 @@ function extractColorsFromPage(doc) {
     return [...new Set(styles)];
 }
 
-chrome.webNavigation.onCompleted.addListener((details) => {
+chrome.webNavigation.onCompleted.addListener(async (details) => {
     if (details.frameId === 0) { // Chỉ xử lý khi toàn bộ trang web đã tải xong (không phải iframe)
         const url = details.url;
         const visitTime = Date.now();
 
-        saveHistoryToDB(url, visitTime);
+        // Lấy tiêu đề của trang web
+        const title = await fetchPageTitle(url);
 
-        console.log('Page loaded:', url, isSearchURL(url));
+        // Lưu vào IndexedDB
+        const pageData = {
+            url: url,
+            title: title,
+            lastVisitTime: visitTime,
+            is_embedded: false
+        };
+        const id = await storeHistoryItem(pageData);
+        pageData.id = id;
+
+        console.log('Page loaded:', pageData);
 
         if (!isSearchURL(url)) {
-            saveHistoryToDB(url, visitTime);
-
-            // Tải xuống source của trang web và phân tích nội dung
-            fetchPageSourceAndAnalyze(url).then(analysisResult => {
-                // Lưu kết quả phân tích vào IndexedDB
-                saveAnalysisToDB(url, analysisResult);
-            }).catch(error => console.error('Failed to analyze page:', error));
-
-            // Gửi thông điệp tới `history.js` để cập nhật danh sách lịch sử
-            chrome.runtime.sendMessage({
-                action: 'newHistoryItem',
-                item: { url, visitTime }
-            });
+            // Gửi bản ghi mới về backend API /upload_history
+            uploadHistory([pageData]);
         }
     }
 });
+
+async function fetchPageTitle(url) {
+    try {
+        const response = await fetch(url);
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        return doc.querySelector('title') ? doc.querySelector('title').innerText : 'No title found';
+    } catch (error) {
+        console.error('Failed to fetch page title:', error);
+        return 'No title found';
+    }
+}
+
+async function uploadHistory(newHistoryData) {
+    try {
+        const response = await fetch('http://localhost:5000/upload_history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ history: newHistoryData })
+        });
+
+        if (!response.ok) throw new Error('Failed to upload history to server');
+        const { history_data } = await response.json();
+        console.log('Processed history data:', history_data);
+
+        // Update IndexedDB with processed items
+        await updateProcessedItems(history_data);
+    } catch (error) {
+        console.error('Error uploading history:', error);
+    }
+}
 
 function isSearchURL(url) {
     const searchEngines = [
@@ -96,42 +128,23 @@ function saveAnalysisToDB(url, analysisResult) {
     }).catch(error => console.error('Failed to save page analysis:', error));
 }
 
-function fetchPageSourceAndAnalyze(url) {
-    return fetch(url)
-        .then(response => response.text())
-        .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const title = doc.querySelector('title') ? doc.querySelector('title').innerText : 'No title found';
-            const content = extractMainContent(doc);
-            const colors = extractColorsFromPage(doc);
-
-            return {
-                title,
-                content,
-                colors
-            };
-        });
-}
-
 function openDatabase() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('historyDB', 1);
+        const request = indexedDB.open('historyDB', 2);
 
         request.onupgradeneeded = event => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains('history')) {
-                db.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
+            const store = db.objectStoreNames.contains('history')
+                ? event.target.transaction.objectStore('history')
+                : db.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
+
+            if (!store.indexNames.contains('is_embedded')) {
+                store.createIndex('is_embedded', 'is_embedded', { unique: false });
             }
         };
 
-        request.onsuccess = event => {
-            resolve(event.target.result);
-        };
-
-        request.onerror = event => {
-            reject(event.target.error);
-        };
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
     });
 }
 
@@ -149,6 +162,32 @@ function getAllHistoryItems() {
             request.onerror = (event) => {
                 reject(event.target.error);
             };
+        }).catch(error => reject(error));
+    });
+}
+
+function updateProcessedItems(historyData) {
+    return new Promise((resolve, reject) => {
+        openDatabase().then(db => {
+            const tx = db.transaction('history', 'readwrite');
+            const store = tx.objectStore('history');
+
+            historyData.forEach(item => {
+                const request = store.get(item.id);
+                request.onsuccess = () => {
+                    const record = request.result;
+                    if (record) {
+                        record.content = item.content;
+                        record.color = item.color;
+                        record.categories = item.categories;
+                        record.is_embedded = true;
+                        store.put(record);
+                    }
+                };
+            });
+
+            tx.oncomplete = () => resolve();
+            tx.onerror = (event) => reject(event.target.error);
         }).catch(error => reject(error));
     });
 }
@@ -189,6 +228,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ error: error.message });
         });
         return true; // Giữ kênh message mở để gửi phản hồi không đồng bộ
+    } else if (message.action === 'updateProcessedItems') {
+        updateProcessedItems(message.historyData).then(() => {
+            sendResponse({ status: 'success' });
+        }).catch(error => {
+            console.error('Error updating processed items:', error);
+            sendResponse({ error: error.message });
+        });
+        return true; // Giữ kênh message mở để gửi phản hồi không đồng bộ
     }
 });
 
@@ -199,7 +246,7 @@ async function storeHistoryItem(pageData) {
 
     return new Promise((resolve, reject) => {
         const request = store.add(pageData);
-        request.onsuccess = () => resolve();
+        request.onsuccess = (event) => resolve(event.target.result);
         request.onerror = (event) => reject(event.target.error);
     });
 }
@@ -207,6 +254,7 @@ async function storeHistoryItem(pageData) {
 // Hàm để lấy lịch sử trình duyệt trong một tháng qua và lưu vào DB
 async function fetchAndStoreHistory() {
     const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const processedIds = [];
 
     chrome.history.search({
         text: '',
@@ -217,14 +265,14 @@ async function fetchAndStoreHistory() {
             const pageData = {
                 url: item.url,
                 title: item.title,
-                lastVisitTime: item.lastVisitTime
+                lastVisitTime: item.lastVisitTime,
+                is_embedded: false
             };
 
             try {
                 if (!isSearchURL(pageData.url)) {
-                    // const analysisResult = await fetchPageSourceAndAnalyze(pageData.url);
-                    // pageData.analysis = analysisResult;
-                    await storeHistoryItem(pageData);
+                    const id = await storeHistoryItem(pageData);
+                    processedIds.push(id);
                 }
             } catch (error) {
                 console.error('Error storing history item:', error);

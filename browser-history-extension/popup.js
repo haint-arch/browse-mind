@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sendMessage();
         }
     });
-    
+
     function fetchHistoryFromIndexedDB() {
         return new Promise((resolve, reject) => {
             chrome.runtime.sendMessage({ action: 'getAllHistoryItems' }, (response) => {
@@ -49,18 +49,21 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             setChatboxReadonly(true);
             showLoadingAnimation(true, 'Uploading history...');
-
-            let historyItems = await fetchHistoryFromIndexedDB();
-            historyItems = filterDuplicateHistory(historyItems);
-
+    
+            let allItems = await fetchHistoryFromIndexedDB();
+    
             const response = await fetch('http://localhost:5000/upload_history', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history: historyItems })
+                body: JSON.stringify({ history: allItems })
             });
-
+    
             if (!response.ok) throw new Error('Failed to upload history to server');
-            console.log('History uploaded successfully');
+            const { history_data } = await response.json();
+            console.log('Processed history data:', history_data);
+            
+            // Update IndexedDB with processed items
+            await updateProcessedItems(history_data);
         } catch (error) {
             console.error('Error uploading history:', error);
         } finally {
@@ -69,19 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function filterDuplicateHistory(historyItems) {
-        const uniqueHistory = [];
-        const seenUrls = new Set();
-        const seenTitles = new Set();
-
-        for (const item of historyItems) {
-            if (!seenUrls.has(item.url) && !seenTitles.has(item.title)) {
-                uniqueHistory.push(item);
-                seenUrls.add(item.url);
-                seenTitles.add(item.title);
-            }
-        }
-        return uniqueHistory;
+    function updateProcessedItems(historyData) {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ action: 'updateProcessedItems', historyData }, (response) => {
+                response.error ? reject(response.error) : resolve();
+            });
+        });
     }
 
     function setChatboxReadonly(isReadonly) {
@@ -108,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initializeHistory() {
         try {
             await uploadHistory();
-            await clearIndexedDB();
+            // await clearIndexedDB();
         } catch (error) {
             console.error('Error initializing history:', error);
         }
