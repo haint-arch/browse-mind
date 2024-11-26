@@ -3,7 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isRecording = false;
     let startTime;
     let elapsedTimeInterval;
+    let audioChunks = [];
     let socket;
+    let mediaRecorder;
 
     const chatInput = document.getElementById('chatInput');
     const chatButton = document.getElementById('chatButton');
@@ -49,19 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             setChatboxReadonly(true);
             showLoadingAnimation(true, 'Uploading history...');
-    
+
             let allItems = await fetchHistoryFromIndexedDB();
-    
+
             const response = await fetch('http://localhost:5000/upload_history', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ history: allItems })
             });
-    
+
             if (!response.ok) throw new Error('Failed to upload history to server');
             const { history_data } = await response.json();
             console.log('Processed history data:', history_data);
-            
+
             // Update IndexedDB with processed items
             await updateProcessedItems(history_data);
         } catch (error) {
@@ -74,9 +76,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateProcessedItems(historyData) {
         return new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({ action: 'updateProcessedItems', historyData }, (response) => {
-                response.error ? reject(response.error) : resolve();
-            });
+            chrome.runtime.sendMessage(
+                {
+                    action: 'updateProcessedItems',
+                    historyData: historyData
+                },
+                (response) => {
+                    if (response.error) {
+                        console.error('Error updating processed items:', response.error);
+                        reject(response.error);
+                    } else {
+                        console.log('Successfully updated processed items with line information');
+                        resolve();
+                    }
+                }
+            );
         });
     }
 
@@ -104,7 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initializeHistory() {
         try {
             await uploadHistory();
-            // await clearIndexedDB();
         } catch (error) {
             console.error('Error initializing history:', error);
         }
@@ -125,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
         if (recentChat.question) chatInput.value = recentChat.question;
         if (recentChat.response && Array.isArray(recentChat.response)) {
-            const messageElement = createResponseElement(recentChat.response);
+            const messageElement = createResponseElements(recentChat.response);
             chatResponse.appendChild(messageElement);
         }
         if (recentChat.question || (recentChat.response && recentChat.response.length > 0)) {
@@ -139,92 +152,48 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('recentChat', JSON.stringify({ question, response }));
     }
 
-    function createResponseElement(responses) {
-        const containerElement = document.createElement('div');
-        containerElement.classList.add('responses-container');
-
-        responses.forEach((response, index) => {
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('response-message');
-
-            const titleElement = document.createElement('a');
-            titleElement.href = response.url;
-            titleElement.textContent = `${index + 1}. ${response.title}`;
-            titleElement.target = '_blank';
-            messageElement.appendChild(titleElement);
-
-            const similarityElement = document.createElement('div');
-            similarityElement.textContent = `Độ tương đồng: ${response.score.toFixed(4)}`;
-            similarityElement.classList.add('similarity');
-            messageElement.appendChild(similarityElement);
-
-            containerElement.appendChild(messageElement);
-        });
-
-        return containerElement;
-    }
-
     async function sendMessage() {
         const message = chatInput.value.trim();
         if (!message) return;
-
+    
         try {
             if (headerH2) {
                 assistantHeader.style.height = '100px';
                 headerH2.remove();
             }
-
+    
             const loadingElement = document.createElement('div');
             loadingElement.classList.add('loading');
             assistantHeader.appendChild(loadingElement);
-
+    
             chatResponse.innerHTML = '';
-
+    
             const response = await fetch('http://localhost:5000/chatbot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: message })
             });
-
+    
             const data = await response.json();
             console.log('Chatbot response:', data);
-
+    
             if (typeof data.response === 'string') {
                 const messageElement = document.createElement('div');
                 messageElement.classList.add('response-message');
                 messageElement.textContent = data.response;
                 chatResponse.appendChild(messageElement);
             } else if (Array.isArray(data.response) && data.response.length > 0) {
-                data.response.forEach(item => {
-                    const messageElement = document.createElement('div');
-                    messageElement.classList.add('response-message');
-
-                    const titleElement = document.createElement('a');
-                    titleElement.href = item.url;
-                    titleElement.textContent = item.title;
-                    titleElement.target = '_blank';
-                    messageElement.appendChild(titleElement);
-
-                    const scoreElement = document.createElement('div');
-                    scoreElement.classList.add('similarity');
-                    scoreElement.textContent = `Score: ${item.score.toFixed(2)}`;
-                    messageElement.appendChild(scoreElement);
-
-                    const categoriesElement = document.createElement('div');
-                    categoriesElement.classList.add('similarity');
-                    categoriesElement.textContent = `Categories: ${item.categories.join(', ')}`;
-                    messageElement.appendChild(categoriesElement);
-
-                    chatResponse.appendChild(messageElement);
-                });
-
-                saveRecentChat(message, data.response);
+                const fullHistoryItems = await Promise.all(data.response.map(async item => {
+                    const fullItem = await getFullHistoryItem(item.id);
+                    return { ...item, ...fullItem };
+                }));
+                const responseElement = await createResponseElements(fullHistoryItems);
+                chatResponse.appendChild(responseElement);
+                saveRecentChat(message, fullHistoryItems);
             } else {
                 throw new Error('Unexpected response format');
             }
-
-            assistantHeader.removeChild(loadingElement);
-            assistantHeader.style.height = '';
+    
             chatInput.value = '';
         } catch (error) {
             console.error('Error communicating with the chatbot:', error);
@@ -232,42 +201,220 @@ document.addEventListener('DOMContentLoaded', () => {
             errorElement.textContent = 'Error communicating with the chatbot.';
             errorElement.classList.add('response-message');
             chatResponse.appendChild(errorElement);
-
+    
             saveRecentChat(message, 'Error communicating with the chatbot.');
-
-            if (loadingElement && assistantHeader.contains(loadingElement)) {
+        } finally {
+            const loadingElement = assistantHeader.querySelector('.loading');
+            if (loadingElement) {
                 assistantHeader.removeChild(loadingElement);
-                assistantHeader.style.height = '';
             }
+            assistantHeader.style.height = '';
         }
+    }
+
+    async function getFullHistoryItem(idOrUrl) {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(
+                { action: 'getHistoryItem', idOrUrl: idOrUrl },
+                (response) => {
+                    if (response.error) {
+                        console.error('Error fetching history item:', response.error);
+                        reject(response.error);
+                    } else {
+                        resolve(response.item);
+                    }
+                }
+            );
+        });
+    }
+
+    async function createResponseElements(historyItems) {
+        const containerElement = document.createElement('div');
+        containerElement.classList.add('responses-container');
+    
+        for (const item of historyItems) {
+            const historyContainer = await createHistoryContainer(item);
+            containerElement.appendChild(historyContainer);
+        }
+    
+        return containerElement;
+    }
+
+    async function createHistoryContainer(item) {
+        const historyContainer = document.createElement('div');
+        historyContainer.classList.add('history-container');
+        historyContainer.dataset.lineId = item.line_id;
+    
+        // Create navigation buttons
+        const navigationElement = document.createElement('div');
+        navigationElement.classList.add('history-navigation');
+    
+        const prevButton = document.createElement('button');
+        prevButton.innerHTML = '&lt;';
+        prevButton.disabled = !item.prev_item;
+        prevButton.onclick = () => navigateToItem(item.prev_item);
+    
+        const nextButton = document.createElement('button');
+        nextButton.innerHTML = '&gt;';
+        nextButton.disabled = !item.next_item;
+        nextButton.onclick = () => navigateToItem(item.next_item);
+    
+        navigationElement.appendChild(prevButton);
+        navigationElement.appendChild(nextButton);
+        historyContainer.appendChild(navigationElement);
+    
+        // Create item content
+        const itemElement = createItemElement(item);
+        historyContainer.appendChild(itemElement);
+    
+        // Create containers for previous and next items
+        // if (item.prev_item) {
+        //     const prevItem = await getFullHistoryItem(item.prev_item);
+        //     const prevItemContainer = document.createElement('div');
+        //     prevItemContainer.classList.add('adjacent-item', 'prev-item');
+        //     prevItemContainer.appendChild(createItemElement(prevItem));
+        //     historyContainer.appendChild(prevItemContainer);
+        // }
+    
+        // if (item.next_item) {
+        //     const nextItem = await getFullHistoryItem(item.next_item);
+        //     const nextItemContainer = document.createElement('div');
+        //     nextItemContainer.classList.add('adjacent-item', 'next-item');
+        //     nextItemContainer.appendChild(createItemElement(nextItem));
+        //     historyContainer.appendChild(nextItemContainer);
+        // }
+    
+        return historyContainer;
+    }
+
+    function createItemElement(item) {
+        const itemElement = document.createElement('div');
+        itemElement.classList.add('history-item');
+
+        const titleElement = document.createElement('a');
+        titleElement.href = item.url;
+        titleElement.textContent = item.title;
+        titleElement.target = '_blank';
+        itemElement.appendChild(titleElement);
+
+        if (item.score !== undefined) {
+            const scoreElement = document.createElement('div');
+            scoreElement.classList.add('similarity');
+            scoreElement.textContent = `Score: ${item.score.toFixed(4)}`;
+            itemElement.appendChild(scoreElement);
+        }
+
+        if (item.categories && item.categories.length > 0) {
+            const categoriesElement = document.createElement('div');
+            categoriesElement.classList.add('categories');
+            categoriesElement.textContent = `Categories: ${item.categories.join(', ')}`;
+            itemElement.appendChild(categoriesElement);
+        }
+
+        if (item.color) {
+            const colorElement = document.createElement('div');
+            colorElement.classList.add('color');
+            colorElement.textContent = `Color: rgb(${item.color.join(', ')})`;
+            colorElement.style.backgroundColor = `rgb(${item.color.join(', ')})`;
+            colorElement.style.color = getContrastColor(item.color);
+            itemElement.appendChild(colorElement);
+        }
+
+        const timeElement = document.createElement('div');
+        timeElement.classList.add('time');
+        timeElement.textContent = `Last Visited: ${new Date(item.lastVisitTime).toLocaleString()}`;
+        itemElement.appendChild(timeElement);
+
+        return itemElement;
+    }
+
+    function getContrastColor(rgb) {
+        const brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+        return brightness > 128 ? 'black' : 'white';
+    }
+
+    async function navigateToItem(itemId) {
+        if (!itemId) return;
+    
+        const item = await getFullHistoryItem(itemId);
+        if (!item) return;
+    
+        const containers = document.querySelectorAll('.history-container');
+        containers.forEach(container => {
+            if (container.dataset.lineId === item.line_id) {
+                container.style.display = 'block';
+                updateHistoryContainer(container, item);
+            } else {
+                container.style.display = 'none';
+            }
+        });
+    }
+
+    async function updateHistoryContainer(container, item) {
+        // Update main item
+        const itemElement = container.querySelector('.history-item');
+        itemElement.innerHTML = '';
+        itemElement.appendChild(createItemElement(item));
+    
+        // Update navigation buttons
+        const prevButton = container.querySelector('.history-navigation button:first-child');
+        const nextButton = container.querySelector('.history-navigation button:last-child');
+    
+        prevButton.disabled = !item.prev_item;
+        nextButton.disabled = !item.next_item;
+    
+        prevButton.onclick = () => navigateToItem(item.prev_item);
+        nextButton.onclick = () => navigateToItem(item.next_item);
+    
+        // Update previous item container
+        // let prevItemContainer = container.querySelector('.prev-item');
+        // if (item.prev_item) {
+        //     const prevItem = await getFullHistoryItem(item.prev_item);
+        //     if (!prevItemContainer) {
+        //         prevItemContainer = document.createElement('div');
+        //         prevItemContainer.classList.add('adjacent-item', 'prev-item');
+        //         container.appendChild(prevItemContainer);
+        //     }
+        //     prevItemContainer.innerHTML = '';
+        //     prevItemContainer.appendChild(createItemElement(prevItem));
+        // } else if (prevItemContainer) {
+        //     prevItemContainer.remove();
+        // }
+    
+        // Update next item container
+        // let nextItemContainer = container.querySelector('.next-item');
+        // if (item.next_item) {
+        //     const nextItem = await getFullHistoryItem(item.next_item);
+        //     if (!nextItemContainer) {
+        //         nextItemContainer = document.createElement('div');
+        //         nextItemContainer.classList.add('adjacent-item', 'next-item');
+        //         container.appendChild(nextItemContainer);
+        //     }
+        //     nextItemContainer.innerHTML = '';
+        //     nextItemContainer.appendChild(createItemElement(nextItem));
+        // } else if (nextItemContainer) {
+        //     nextItemContainer.remove();
+        // }
     }
 
     async function startRecording() {
         try {
+            // Yêu cầu quyền truy cập microphone
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            recorder = new MediaRecorder(stream);
 
+            // Tạo MediaRecorder và ghi âm
+            recorder = new MediaRecorder(stream);
             recorder.ondataavailable = (e) => {
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(e.data);
-                }
+                audioChunks.push(e.data);
             };
 
             recorder.onstart = () => {
                 startTime = Date.now();
-                updateMicIcon(true);
-                startTimer();
-                socket = new WebSocket('ws://localhost:5000/transcribe_stream');
-                socket.onopen = () => console.log('WebSocket connection established');
-                socket.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    chatInput.value += data.transcription + ' ';
-                };
-                socket.onerror = (error) => console.error('WebSocket error:', error);
-                socket.onclose = () => console.log('WebSocket connection closed');
+                updateMicIcon(true);  // Cập nhật nút micro thành màu đỏ
+                startTimer();  // Hiển thị thời gian ghi âm
             };
 
-            recorder.start(100);
+            recorder.start();
             isRecording = true;
         } catch (err) {
             console.error('Lỗi khi truy cập microphone:', err);
@@ -275,12 +422,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function stopRecording() {
+    async function stopRecording() {
         recorder.stop();
-        updateMicIcon(false);
-        stopTimer();
-        if (socket) socket.close();
-        isRecording = false;
+        recorder.onstop = async () => {
+            updateMicIcon(false);  // Cập nhật nút micro thành màu trắng
+            stopTimer();  // Dừng hiển thị thời gian ghi âm
+
+            // Tạo Blob từ dữ liệu âm thanh đã ghi
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            audioChunks = [];  // Xóa dữ liệu cũ
+
+            // Gửi file âm thanh đến API /transcribe
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+
+            try {
+                chatInput.style.display = 'none';
+                speechToTextLoading.style.display = 'flex';
+
+                const response = await fetch('http://localhost:5000/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                chatResponse.innerHTML = ``;
+                chatInput.value = data.transcription;
+            } catch (error) {
+                console.error('Error sending audio to the server:', error);
+                chatResponse.innerHTML = 'Lỗi trong quá trình xử lý âm thanh.';
+            } finally {
+                speechToTextLoading.style.display = 'none';
+                chatInput.style.display = 'block';
+                isRecording = false;
+                updateMicIcon(false);
+            }
+        };
     }
 
     function updateMicIcon(isRecording) {
@@ -288,6 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startTimer() {
+        startTime = Date.now();
         elapsedTimeInterval = setInterval(() => {
             const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
             chatResponse.innerHTML = `Recording (${elapsedTime}s)`;
@@ -298,4 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(elapsedTimeInterval);
         chatResponse.innerHTML = '';
     }
+
+    window.navigateToLine = navigateToItem;
 });

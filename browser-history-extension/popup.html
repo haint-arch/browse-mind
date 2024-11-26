@@ -9,24 +9,127 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        height: -100vh;
+        height: 100vh;
         margin: 0;
         background-color: #f0f0f0;
         font-family: "Roboto", sans-serif;
+      }
+
+      .history-container {
+        position: relative;
+        margin-bottom: 20px;
+        padding: 20px;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        background-color: white;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+      }
+
+      .history-container:hover {
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+      }
+
+      .history-container:not(:first-child) {
+        display: none;
+      }
+
+      .history-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .history-navigation button {
+        background: none;
+        border: none;
+        color: #4caf50;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 5px 10px;
+        transition: all 0.2s ease;
+      }
+
+      .history-navigation button:hover {
+        background-color: #f0f0f0;
+        border-radius: 50%;
+      }
+
+      .history-navigation button:disabled {
+        color: #ccc;
+        cursor: not-allowed;
+      }
+
+      .history-navigation .page-indicator {
+        font-size: 14px;
+        color: #666;
+      }
+
+      .history-line {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .history-item {
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        padding: 15px;
+        transition: all 0.2s ease;
+      }
+
+      .history-item:hover {
+        background-color: #f0f0f0;
+      }
+
+      .history-item a {
+        color: #1a73e8;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 16px;
+        margin-bottom: 8px;
+        display: block;
+      }
+
+      .history-item a:hover {
+        text-decoration: underline;
+      }
+
+      .history-item .similarity,
+      .history-item .categories,
+      .history-item .time {
+        font-size: 14px;
+        color: #666;
+        margin-top: 5px;
+      }
+
+      .history-item .color {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-top: 5px;
       }
 
       .container {
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        width: 280px;
-        min-height: 100px;
-        height: 300px;
+        width: 400px;
+        min-height: 150px;
+        height: 450px;
         background-color: white;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        border-radius: 15px;
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
         overflow: hidden;
         transition: height 0.4s ease-out;
+        scrollbar-width: none; /* For Firefox */
+        -ms-overflow-style: none; /* For Internet Explorer and Edge */
+      }
+
+      .container::-webkit-scrollbar {
+        display: none; /* For Chrome, Safari, and Opera */
       }
 
       .assistant-header {
@@ -34,34 +137,44 @@
         justify-content: center;
         align-items: center;
         text-align: center;
-        font-size: 24px;
-        padding: 20px;
+        font-size: 28px;
+        padding: 25px;
         background-color: #4caf50;
         color: white;
       }
 
       .assistant-header img {
-        margin-right: 10px;
+        margin-right: 15px;
+        width: 32px;
+        height: 32px;
       }
 
       .assistant-body {
         flex: 1;
-        overflow-y: auto;
-        padding: 10px;
+        overflow-y: scroll;
+        padding: 20px;
+        font-size: 16px;
+        scrollbar-width: none; /* For Firefox */
+        -ms-overflow-style: none; /* For Internet Explorer and Edge */
+      }
+
+      .assistant-body::-webkit-scrollbar {
+        display: none; /* For Chrome, Safari, and Opera */
       }
 
       .assistant-footer {
         display: flex;
         align-items: center;
-        padding: 10px;
+        padding: 15px;
         border-top: 1px solid #ddd;
       }
 
       .assistant-footer input[type="text"] {
         flex: 1;
-        padding: 10px;
+        padding: 12px 15px;
+        font-size: 16px;
         border: 1px solid #ddd;
-        border-radius: 20px;
+        border-radius: 25px;
         outline: none;
       }
 
@@ -69,12 +182,17 @@
         background-color: #4caf50;
         border: none;
         border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        margin-left: 10px;
+        width: 50px;
+        height: 50px;
+        margin-left: 15px;
         color: white;
-        font-size: 18px;
+        font-size: 22px;
         cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .assistant-footer button:hover {
+        background-color: #45a049;
       }
 
       .invert-color {
@@ -186,6 +304,51 @@
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         z-index: 1000;
       }
+
+      .speech-to-text-loading {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        height: 50px;
+        background-color: #f0f0f0;
+        border-radius: 25px;
+        padding: 0 20px;
+        font-size: 16px;
+        color: #333;
+      }
+
+      .speech-to-text-loading .dots {
+        display: flex;
+        margin-left: 10px;
+      }
+
+      .speech-to-text-loading .dot {
+        width: 8px;
+        height: 8px;
+        background-color: #333;
+        border-radius: 50%;
+        margin: 0 4px;
+        animation: pulse 1.5s infinite ease-in-out;
+      }
+
+      .speech-to-text-loading .dot:nth-child(2) {
+        animation-delay: 0.5s;
+      }
+
+      .speech-to-text-loading .dot:nth-child(3) {
+        animation-delay: 1s;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          transform: scale(0.8);
+          opacity: 0.5;
+        }
+        50% {
+          transform: scale(1.2);
+          opacity: 1;
+        }
+      }
     </style>
   </head>
   <body>
@@ -204,11 +367,15 @@
         <!-- Chat messages will appear here -->
       </div>
       <div class="assistant-footer">
-        <input
-          type="text"
-          id="chatInput"
-          placeholder="Write your question..."
-        />
+        <input type="text" id="chatInput" placeholder="Write your question..." />
+        <div class="speech-to-text-loading" id="speechToTextLoading">
+          Converting speech to text
+          <div class="dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+          </div>
+        </div>
         <button id="chatButton">
           <img src="assets/send-plane-fill.svg" alt="Send" class="send-icon invert-color">
         </button>

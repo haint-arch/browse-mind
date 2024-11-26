@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "History Browser",
   "version": "1.0",
+  "minimum_chrome_version": "116",
   "description": "Track and display browser history.",
   "permissions": [
     "notifications",
@@ -19,5 +20,8 @@
   },
   "action": {
     "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:5000 ws://localhost:5000"
   }
 }

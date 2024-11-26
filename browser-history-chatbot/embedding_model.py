@@ -1,35 +1,36 @@
+import json
 import logging
+import os
+import queue
+import re
+import time
+import threading
+from collections import Counter, deque
+from datetime import datetime, timedelta
+from io import BytesIO
+from urllib.parse import urlparse, parse_qs, urlunparse
+
+import wave
+import io
+import ffmpeg
+import faiss
+import numpy as np
+import requests
+import torch
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
+from geventwebsocket.websocket import WebSocket
+from google.cloud import speech
+from google.oauth2 import service_account
+from PIL import Image
+from bs4 import BeautifulSoup
+from colorthief import ColorThief
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sockets import Sockets
-from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM, AutoTokenizer, AutoModelForTokenClassification, \
-    pipeline
-from urllib.parse import urlparse, parse_qs, urlunparse
-import torch
-import faiss
-import numpy as np
-import os
-import json
-import io
-import re
-import gradio as gr
-import requests
-import wave
-import ffmpeg
-import queue
-import ast
-import threading
-from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from pydub import AudioSegment
-from google.oauth2 import service_account
-from google.cloud import speech
-from werkzeug.utils import secure_filename
-from colorthief import ColorThief
-from io import BytesIO
-from PIL import Image
-from collections import Counter
+from transformers import AutoModel, AutoTokenizer
 
 load_dotenv()
 app = Flask(__name__)
@@ -51,7 +52,12 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'sa-speech-history-browser.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'sa-speech-history-browser.json'
+
+history_buffer = deque(maxlen=20)  # Tăng kích thước buffer
+last_process_time = time.time()
+BUFFER_PROCESS_INTERVAL = 300  # Process buffer every 5 minutes
+MIN_ITEMS_TO_PROCESS = 5  # Số lượng tối thiểu các mục để xử lý
 
 title_vectorstore = None
 content_vectorstore = None
@@ -283,21 +289,21 @@ def normalize_url(url):
     return url
 
 
-def filterDuplicateHistory(historyItems):
+def filter_duplicate_history(history_items):
     """
     Lọc các URL hoặc tiêu đề trùng lặp từ lịch sử duyệt web.
     """
-    uniqueHistory = []
-    seenUrls = set()
-    seenTitles = set()
+    unique_history = []
+    seen_urls = set()
+    seen_titles = set()
 
-    for item in historyItems:
+    for item in history_items:
         normalized_url = normalize_url(item['url'])
-        if normalized_url not in seenUrls and item['title'] not in seenTitles:
-            uniqueHistory.append(item)
-            seenUrls.add(normalized_url)
-            seenTitles.add(item['title'])
-    return uniqueHistory
+        if normalized_url not in seen_urls and item['title'] not in seen_titles:
+            unique_history.append(item)
+            seen_urls.add(normalized_url)
+            seen_titles.add(item['title'])
+    return unique_history
 
 
 def get_normalized_embeddings(sentences, max_length=128):
@@ -317,32 +323,6 @@ def semantic_search(query_embedding, vectorstore, filtered_history, k=1):
         for j, i in enumerate(indices[0])
     ]
     return results
-
-
-# Methods for audio transcription
-def transcribe_audio_stream(audio_generator):
-    credentials = service_account.Credentials.from_service_account_file('sa-speech-history-browser.json')
-    client = speech.SpeechClient(credentials=credentials)
-
-    config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=16000,
-        language_code='vi-VN'
-    )
-
-    streaming_config = speech.StreamingRecognitionConfig(
-        config=config,
-        interim_results=True
-    )
-
-    requests = (speech.StreamingRecognizeRequest(audio_content=content) for content in audio_generator)
-    responses = client.streaming_recognize(config=streaming_config, requests=requests)
-
-    for response in responses:
-        for result in response.results:
-            if result.is_final:
-                logging.info(f"Transcript: {result.alternatives[0].transcript}")
-                yield result.alternatives[0].transcript
 
 
 # Methods for prompt-based API calls
@@ -442,41 +422,65 @@ def classify_website(title, content):
 
 
 def extract_features(input_text):
+    current_time = datetime.now()
+    time_now = current_time.strftime("%Y-%m-%dT%H:%M:%S")
+    time_one_month_ago = (current_time - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+
     prompt = f"""
         Extract the following features from the text provided, returning only the output in JSON format:
 
-        1. **time** - Look for references to times or events that may indicate when the action or request occurred, such as "yesterday at 7 PM" or "3 days ago." Normalize the time to obtain `start_date` and `end_date` in a standard format to support time constraints. 
+        1. **time** - Analyze references to time or events in the text and normalize them to a standard format. Use Vietnam Time Zone (GMT+7). Interpret time-related phrases as follows:
+           - "gần đây nhất" (most recently): 
+             - `value`: null
+             - `start_date`: {time_one_month_ago}
+             - `end_date`: {time_now}
+             - `rank`: 1
+           - "gần đây thứ hai" (second most recently):
+             - `value`: null
+             - `start_date`: {time_one_month_ago}
+             - `end_date`: {time_now}
+             - `rank`: 2
+           - "xa nhất" (farthest):
+             - `value`: null
+             - `start_date`: "2020-01-01T00:00:00"
+             - `end_date`: {time_one_month_ago}
+             - `rank`: -1
+           - For specific time references like "hôm qua 7h tối" (yesterday at 7 PM) and today is {time_now}:
+             - Calculate the exact time range
+             - `value`: "2021-07-01T19:00:00"
+             - `start_date`: "2021-07-01T18:00:00"
+             - `end_date`: "2021-07-01T20:00:00"
+             - `rank`: -1
+             - Set `rank` to 0 (indicating a specific time, not a relative ranking)
+           - For vague terms like "gần đây" (recently):
+             - `value`: null
+             - `start_date`: {time_one_month_ago}
+             - `end_date`: {time_now}
+             - `rank`: 0
 
-        - For example, if the text includes "2 days ago," calculate `start_date` as two days before today’s date (today is 31/10/2024): 
-            - `start_date`: 00:00 on 29/10/2024
-            - `end_date`: 23:59 on 29/10/2024.
-        
-        - If the text specifies a time, like "today at 8 PM," convert to an hour range around the specified time:
-            - `start_date`: 19:00 on 31/10/2024
-            - `end_date`: 21:00 on 31/10/2024.
+        2. **title** - Extract phrases related to the main topic, often appearing after "liên quan đến" (related to) or "chủ đề chính là" (main topic is).
 
-        2. **title** - Identify any references to topics or main themes, especially if they are phrases that start with or include "related to" or "main topic." For example, "related to food," "main theme about travel."
+        3. **color** - Detect mentions of colors (e.g., "vàng" (yellow), "xanh" (blue), "đỏ" (red)). Return in RGB format.
 
-        3. **color** - Detect references to primary or dominant colors mentioned in the text, such as "yellow," "blue," or "green." Return the color in RGB format.
+        4. **content** - Extract the core focus or topic, often found after "nội dung chính là" (main content is) or "về" (about).
 
-        4. **content** - Extract the main content or focus area of the text, often appearing after phrases like "main content about" or "content regarding." For example, "main content about Vietnamese bun cha dish."
+        5. **category** - Classify into: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home.
 
-        5. **category** - Classify the website into one of the following categories: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home.
-
-        Example Input: "Tìm cho tôi 1 website tôi có truy cập vào 7h tối qua, web này có tiêu đề liên quan đến ẩm thực và màu chủ đạo là màu vàng, nội dung chính về món ăn bún chả Việt Nam."
+        Example Input: "Tìm cho tôi website truy cập gần đây nhất có tiêu đề liên quan đến công nghệ và màu chủ đạo là xanh lá cây."
 
         Expected JSON Output:
         {{
-        "time": {{
-            "original": "7h tối qua",
-            "value": "2024-10-30T19:00:00",
-            "start_date": "2024-10-30T18:00:00",
-            "end_date": "2024-10-30T20:00:00"
-        }},
-        "title": "liên quan đến ẩm thực",
-        "color": [255, 255, 0],
-        "content": "món ăn bún chả Việt Nam",
-        "category": "food"
+          "time": {{
+            "original": "gần đây nhất",
+            "value": null,
+            "start_date": "{time_one_month_ago}",
+            "end_date": "{time_now}",
+            "rank": 1
+          }},
+          "title": "liên quan đến công nghệ",
+          "color": [0, 255, 0],
+          "content": null,
+          "category": "tech"
         }}
 
         Text to Analyze: "{input_text}"
@@ -578,6 +582,8 @@ def calculate_total_score(title_score, content_score, time_score, color_score, c
 # API Chatbot
 @app.route('/chatbot', methods=['POST'])
 def chatbot():
+    global history_data, title_vectorstore, content_vectorstore
+
     user_message = request.json.get('query', '')
     logging.info("Received user message: %s", user_message)
 
@@ -591,128 +597,134 @@ def chatbot():
         if features:
             query_embedding = get_normalized_embeddings([user_message])
 
-            # Use both title and content vectorstore
-            title_results = []
-            content_results = []
-            color_results = []
-            time_results = []
+            # Initialize lists to store top results for each feature
+            top_results = {
+                'title': [],
+                'content': [],
+                'time': [],
+                'color': [],
+                'category': []
+            }
 
-            if 'title' in features and features['title']:
-                title_results = semantic_search(query_embedding, title_vectorstore, history_data)
+            # Process each feature and collect top results
+            if features.get('title'):
+                top_results['title'] = semantic_search(query_embedding, title_vectorstore, history_data, k=10)
 
-            if 'content' in features and features['content']:
-                content_results = semantic_search(query_embedding, content_vectorstore, history_data)
+            if features.get('content'):
+                top_results['content'] = semantic_search(query_embedding, content_vectorstore, history_data, k=10)
 
-            if 'color' in features and features['color']:
-                for item in history_data:
-                    if 'color' in item:
-                        color_score = calculate_color_score(features['color'], item['color'])
-                        if color_score > 0:
-                            color_results.append((item, color_score))
+            if features.get('time') and (features['time'].get('value') or features['time'].get('start_date')) and features['time'].get('rank') and features['time'].get('original'):
+                rank = features['time']['rank']
+                # Calculate time scores for all top items
+                # For non-specific time queries
+                if rank == 0:
+                    dt = datetime.strptime(features['time']['value'], '%Y-%m-%dT%H:%M:%S')
+                    query_time = int(dt.timestamp()) * 1000
 
-            if 'time' in features and features['time']['value']:
-                query_time = datetime.strptime(features['time']['value'], "%Y-%m-%dT%H:%M:%S").timestamp()
-                for item in history_data:
-                    if 'lastVisitTime' in item:
-                        page_time = item['lastVisitTime'] / 1000  # Convert milliseconds to seconds
-                        max_time_diff = 30 * 24 * 60 * 60  # 30 days in seconds
-                        time_score = calculate_time_score(query_time, page_time, max_time_diff)
-                        if time_score > 0:
-                            time_results.append((item, time_score))
+                    time_results = [
+                        (item, calculate_time_score(query_time, item['lastVisitTime'], 2592000))
+                        for item in history_data
+                    ]
+                    top_results['time'] = sorted(time_results, key=lambda x: x[1], reverse=True)[:10]
+                # For specific time queries
+                elif rank == -1:
+                    dt = datetime.strptime(features['time']['start_date'], '%Y-%m-%dT%H:%M:%S')
+                    query_time = int(dt.timestamp()) * 1000
 
-            # Combine and deduplicate results
-            combined_results = {}
-            for item, score in title_results + content_results + color_results + time_results:
-                if item['url'] not in combined_results:
-                    combined_results[item['url']] = {'item': item, 'score': score}
+                    time_results = [
+                        (item, calculate_time_score(query_time, item['lastVisitTime'], 2592000))
+                        for item in history_data
+                    ]
+                    top_results['time'] = sorted(time_results, key=lambda x: x[1])[:10]
+                # For most recent or second most recent
+                elif rank > 0:
+                    # Takes all the top N ranks
+                    dt = datetime.strptime(features['time']['end_date'], '%Y-%m-%dT%H:%M:%S')
+                    query_time = int(dt.timestamp()) * 1000
+
+                    time_results = [
+                        (item, calculate_time_score(query_time, item['lastVisitTime'], 2592000))
+                        for item in history_data
+                    ]
+                    top_results['time'] = sorted(time_results, key=lambda x: x[1], reverse=True)[:rank]
+                # For farthest
                 else:
-                    combined_results[item['url']]['score'] = max(combined_results[item['url']]['score'], score)
+                    # Take all the top N the farthest ranks
+                    time_results = [
+                        (item, calculate_time_score(features['time']['value'], item['lastVisitTime'], 2592000))
+                        for item in history_data
+                    ]
+                    top_results['time'] = sorted(time_results, key=lambda x: x[1])[:abs(rank)]
 
-            scores = []
-            for url, data in combined_results.items():
-                item = data['item']
-                base_score = data['score']
+            if features.get('color'):
+                color_results = [
+                    (item, calculate_color_score(features['color'], item.get('color', [0, 0, 0])))
+                    for item in history_data
+                    if 'color' in item
+                ]
+                top_results['color'] = sorted(color_results, key=lambda x: x[1], reverse=True)[:10]
 
-                time_score = 0
-                if 'time' in features and features['time']['value'] and features['time'][
-                    'value'] != "0000-00-00T00:00:00" and features['time']['value'] != "null" and features['time'][
-                    'value'] != "":
-                    query_time = datetime.strptime(features['time']['value'], "%Y-%m-%dT%H:%M:%S").timestamp()
-                    page_time = item['lastVisitTime'] / 1000  # Convert milliseconds to seconds
-                    max_time_diff = 30 * 24 * 60 * 60  # 30 days in seconds
-                    time_score = calculate_time_score(query_time, page_time, max_time_diff)
+            if features.get('category'):
+                category_results = [
+                    (item, calculate_category_score(features['category'], item.get('categories', [])))
+                    for item in history_data
+                ]
+                top_results['category'] = sorted(category_results, key=lambda x: x[1], reverse=True)[:10]
 
-                color_score = 0
-                if 'color' in features and features['color'] and 'color' in item:
-                    query_color = features['color']
-                    page_color = item.get('color')
-                    if isinstance(query_color, list) and len(query_color) == 3:
-                        color_score = calculate_color_score(query_color, page_color)
-                    else:
-                        parsed_color = parse_color(query_color)
-                        if parsed_color:
-                            color_score = calculate_color_score(parsed_color, page_color)
+            # Combine all top results
+            all_top_items = []
+            for feature_results in top_results.values():
+                if feature_results:
+                    for result in feature_results:
+                        if isinstance(result, tuple) and len(result) == 2:
+                            item = result[0]
+                            # Thêm item nếu chưa có trong danh sách
+                            if item not in all_top_items:
+                                all_top_items.append(item)
 
-                category_score = 0
-                if 'category' in features and 'categories' in item:
-                    category_score = calculate_category_score(features['category'], item['categories'])
+            # Calculate comprehensive scores for all top items
+            final_results = []
+            for item in all_top_items:
+                title_score = next((score for i, score in top_results['title'] if i == item), 0)
+                content_score = next((score for i, score in top_results['content'] if i == item), 0)
+                time_score = next((score for i, score in top_results['time'] if i == item), 0)
+                color_score = next((score for i, score in top_results['color'] if i == item), 0)
+                category_score = next((score for i, score in top_results['category'] if i == item), 0)
 
-                total_score = calculate_total_score(base_score, base_score, time_score, color_score, category_score)
-                scores.append((item, total_score))
+                total_score = (
+                    0.4 * title_score +
+                    0.4 * content_score +
+                    0.1 * time_score +
+                    0.05 * color_score +
+                    0.05 * category_score
+                )
 
-            # Sort the results by score in descending order
-            sorted_results = sorted(scores, key=lambda x: x[1], reverse=True)
+                final_results.append((item, total_score))
 
-            # Return the top 3 results
+            # Sort the results by total score in descending order
+            sorted_results = sorted(final_results, key=lambda x: x[1], reverse=True)
+
+            # Return the top result(s)
             if sorted_results:
-                top_3_results = sorted_results[:3]
+                top_results = sorted_results[:1]  # Adjust this if you want to return more than one result
                 response = []
-                for match, score in top_3_results:
+                for match, score in top_results:
                     logging.info("Match: %s, score: %f", match['title'], score)
                     response.append({
+                        'id': match.get('id'),
                         'url': match['url'],
                         'title': match['title'],
-                        'score': score,
-                        'color': match.get('color'),
-                        'categories': match.get('categories', []),
-                        'lastVisitTime': match['lastVisitTime']
+                        'lastVisitTime': match['lastVisitTime'],
+                        'score': score
                     })
-                response = sorted(response, key=lambda x: x['score'], reverse=True)
-                print('Response:', response)
+                print('Response: ', response)
                 return jsonify({'response': response})
             else:
-                return jsonify({'response': "Không tìm thấy tiêu đề liên quan."})
+                return jsonify({'response': "Không tìm thấy kết quả phù hợp."})
         else:
-            return jsonify({'response': "Không tìm thấy tiêu đề liên quan."})
+            return jsonify({'response': "Không thể trích xuất đặc trưng từ câu hỏi."})
     else:
-        return jsonify({'response': "Câu hỏi này không liên quan đến tiêu đề website."})
-
-
-@sockets.route('/transcribe_stream')
-def transcribe_socket(ws):
-    audio_queue = queue.Queue()
-
-    def audio_generator():
-        while True:
-            chunk = audio_queue.get()
-            if chunk is None:
-                break
-            yield chunk
-
-    def receive_audio():
-        while not ws.closed:
-            message = ws.receive()
-            if message:
-                audio_queue.put(message)
-            else:
-                audio_queue.put(None)
-                break
-
-    threading.Thread(target=receive_audio).start()
-
-    for transcript in transcribe_audio_stream(audio_generator()):
-        ws.send(json.dumps({"transcription": transcript}))
-
+        return jsonify({'response': "Câu hỏi này không liên quan đến lịch sử duyệt web."})
 
 def save_history_to_json(new_history_data):
     file_path = 'history_data.json'
@@ -735,28 +747,74 @@ def save_history_to_json(new_history_data):
     logging.info("History data saved to history_data.json")
 
 
+def transcribe_audio(audio_file):
+    credentials = service_account.Credentials.from_service_account_file('sa-speech-history-browser.json')
+    client = speech.SpeechClient(credentials=credentials)
+
+    # Load audio data
+    audio_data = audio_file.read()
+
+    # Convert stereo to mono using ffmpeg-python
+    input_audio = ffmpeg.input('pipe:0')
+    output_audio = ffmpeg.output(input_audio, 'pipe:1', ac=1, format='wav')
+    process = ffmpeg.run_async(output_audio, pipe_stdin=True, pipe_stdout=True, pipe_stderr=True)
+    mono_audio_data, _ = process.communicate(input=audio_data)
+
+    # Convert mono_audio_data (bytes) to a file-like object
+    mono_audio_data_io = io.BytesIO(mono_audio_data)
+
+    with wave.open(mono_audio_data_io, 'rb') as wf:
+        sample_rate = wf.getframerate()
+
+    audio = speech.RecognitionAudio(content=mono_audio_data_io.read())
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=sample_rate,
+        language_code='vi-VN'  # For Vietnamese
+    )
+
+    # Send the request to Google Cloud
+    response = client.recognize(config=config, audio=audio)
+
+    # Extract and return the transcription
+    for result in response.results:
+        print(f'Transcript: {result.alternatives[0].transcript}')
+        return result.alternatives[0].transcript
+
+
 @app.route('/upload_history', methods=['POST'])
 def upload_history():
-    """
-    API xử lý embedding các mục chưa được xử lý và trả về danh sách ID đã xử lý.
-    """
-    global history_data, title_vectorstore, content_vectorstore
+    global history_data, title_vectorstore, content_vectorstore, history_buffer
 
-    new_history_data = request.json.get('history', [])[:10]
-    logging.info("Received %d new history items", len(new_history_data))
+    new_history_data = request.json.get('history', [])
     if not new_history_data:
-        return jsonify({'status': 'error', 'message': 'Empty history data'}), 400
+        return jsonify({'status': 'error', 'message': 'No history data provided'}), 400
 
-    # Lọc bỏ trùng lặp trước khi xử lý
-    new_history_data = filterDuplicateHistory(new_history_data)
+    # Lọc các bản ghi trùng lặp
+    new_history_data = filter_duplicate_history(new_history_data)
+    logging.info("Received %d new history items", len(new_history_data))
 
-    processed_count = 0
-    for item in new_history_data:
-        # Kiểm tra nếu mục đã được embedded
+    # Xử lý tất cả các bản ghi trong new_history_data
+    processed_items = process_history_items(new_history_data)
+
+    # Thêm các bản ghi đã xử lý vào dữ liệu lịch sử chính
+    history_data.extend(processed_items)
+
+    # Tái phân loại các line lịch sử
+    history_lines = group_history_into_lines(history_data)
+
+    logging.info("Processed %d history items into %d lines", len(history_data), len(history_lines))
+    return jsonify({'status': 'success', 'history_data': history_lines})
+
+
+def process_history_items(history_items):
+    global history_data, title_vectorstore, content_vectorstore
+    processed_items = []
+    for item in history_items:
         if item.get('is_embedded', True):
             continue
 
-        # Crawl nội dung từ URL
+        # Crawl content from URL
         content, sentences = crawl_website_content(item['url'])
         if not content:
             item['content'] = []
@@ -764,22 +822,22 @@ def upload_history():
         else:
             item['content'] = sentences
 
-        # Lấy màu sắc chủ đạo từ URL
+        # Get dominant color from URL
         color = get_dominant_color(item['url'])
         if not color:
             logging.warning("Failed to get dominant color from URL: %s", item['url'])
         else:
             item['color'] = color
 
-        # Phân loại website dựa trên nội dung và tiêu đề
+        # Classify website based on content and title
         categories = classify_website(item['title'], content)
         item['categories'] = categories
 
-        # Tạo embeddings cho title và content
+        # Create embeddings for title and content
         title_embedding = get_normalized_embeddings([item['title']])
         content_embedding = get_normalized_embeddings([" ".join(item['content'])])
 
-        # Thêm embeddings vào vectorstore
+        # Add embeddings to vectorstore
         if title_vectorstore is None:
             title_vectorstore = faiss.IndexFlatIP(title_embedding.shape[1])
         title_vectorstore.add(title_embedding)
@@ -788,26 +846,158 @@ def upload_history():
             content_vectorstore = faiss.IndexFlatIP(content_embedding.shape[1])
         content_vectorstore.add(content_embedding)
 
-        # Đánh dấu mục này đã được embedded
+        # Mark this item as embedded
         item['is_embedded'] = True
-        processed_count += 1
 
-    # Cập nhật lịch sử với các mục đã xử lý
-    for item in new_history_data:
-        existing_item = next((x for x in history_data if x['id'] == item['id']), None)
-        if existing_item:
-            existing_item.update(item)
+        processed_items.append(item)
+    return processed_items
+
+
+def group_history_into_lines(history_data, time_threshold=7200, interruption_threshold=300):
+    lines = []
+    current_line = []
+    buffer = []  # Lưu tạm các bản ghi không thể gán ngay
+
+    # Sắp xếp lịch sử theo thời gian
+    sorted_history = sorted(history_data, key=lambda x: x['lastVisitTime'])
+
+    while sorted_history or buffer:
+        if not sorted_history and buffer:
+            # Khi danh sách chính rỗng nhưng buffer còn dữ liệu
+            remaining_buffer = buffer[:]  # Sao chép buffer để xử lý từng phần tử
+            buffer.clear()
+
+            for item in remaining_buffer:
+                # Kiểm tra xem có thể nối vào current_line không
+                if current_line:
+                    last_item = current_line[-1]
+                    time_diff = (item['lastVisitTime'] - last_item['lastVisitTime']) / 1000
+                    same_domain = are_urls_related(item['url'], last_item['url'])
+                    same_category = set(item.get('categories', [])) & set(last_item.get('categories', []))
+
+                    if time_diff <= time_threshold and (same_domain or same_category):
+                        current_line.append(item)
+                        continue  # Chuyển sang phần tử tiếp theo
+
+                # Nếu không nối được, tạo một line mới
+                if current_line:
+                    lines.append(current_line)
+                    current_line = []
+
+                # Tạo line mới cho item hiện tại
+                current_line.append(item)
+
+            # Nếu current_line còn phần tử, thêm vào lines
+            if current_line:
+                lines.append(current_line)
+                current_line = []
+
+            continue  # Quay lại vòng lặp chính
+
+        # Xử lý phần tử trong sorted_history như bình thường
+        item = sorted_history.pop(0)
+
+        if not current_line:
+            # Nếu current_line rỗng, khởi tạo line mới
+            current_line.append(item)
         else:
-            history_data.append(item)
+            last_item = current_line[-1]
+            time_diff = (item['lastVisitTime'] - last_item['lastVisitTime']) / 1000
+            same_domain = are_urls_related(item['url'], last_item['url'])
+            same_category = set(item.get('categories', [])) & set(last_item.get('categories', []))
 
-    logging.info("Processed %d new history items", processed_count)
-    return jsonify({'status': 'success', 'history_data': new_history_data})
+            if time_diff <= time_threshold and (same_domain or same_category):
+                # Nếu thuộc cùng line
+                current_line.append(item)
+            else:
+                # Nếu không thuộc cùng line, kết thúc current_line và bắt đầu line mới
+                lines.append(current_line)
+                current_line = [item]
+
+    # Gộp line hiện tại (nếu có) vào danh sách lines
+    if current_line:
+        lines.append(current_line)
+
+    # Thêm thông tin line_id, prev_line, next_line
+    for line in lines:
+        for i, item in enumerate(line):
+            item['line_id'] = f"line_{lines.index(line)}"
+            item['prev_item'] = line[i - 1]['id'] if i > 0 else None
+            item['next_item'] = line[i + 1]['id'] if i < len(line) - 1 else None
+
+    return lines
+
+
+def reassign_buffer_to_line(buffer, current_line, time_threshold):
+    """
+    Kiểm tra từng mục trong buffer và gán vào line hiện tại nếu có thể.
+    """
+    reassigned_items = []
+    for item in buffer:
+        last_item = current_line[-1]
+        time_diff = (item['lastVisitTime'] - last_item['lastVisitTime']) / 1000
+        same_domain = are_urls_related(item['url'], last_item['url'])
+        same_category = set(item.get('categories', [])) & set(last_item.get('categories', []))
+
+        if time_diff <= time_threshold and (same_domain or same_category):
+            reassigned_items.append(item)
+
+    # Xóa các mục đã gán vào line khỏi buffer
+    for item in reassigned_items:
+        buffer.remove(item)
+
+    return reassigned_items
+
+
+def are_urls_related(url1, url2):
+    parsed1 = urlparse(url1)
+    parsed2 = urlparse(url2)
+
+    # Check if domains are the same or subdomains of each other
+    domain1 = parsed1.netloc.split('.')
+    domain2 = parsed2.netloc.split('.')
+
+    if domain1[-2:] == domain2[-2:]:  # Same top-level and second-level domain
+        return True
+
+    # Check for common paths
+    path1 = parsed1.path.strip('/').split('/')
+    path2 = parsed2.path.strip('/').split('/')
+
+    if len(path1) > 0 and len(path2) > 0 and path1[0] == path2[0]:
+        return True
+
+    return False
+
+
+def can_reconnect_to_line(item, line, time_threshold):
+    for line_item in reversed(line):
+        time_diff = (item['lastVisitTime'] - line_item['lastVisitTime']) / 1000
+        if time_diff <= time_threshold and (are_urls_related(item['url'], line_item['url']) or
+                                            set(item.get('categories', [])) & set(line_item.get('categories', []))):
+            return True
+    return False
+
+
+def merge_interruptions(line, interruption_buffer):
+    if interruption_buffer:
+        # Sort interruptions by time and insert them into the correct position in the line
+        sorted_interruptions = sorted(interruption_buffer, key=lambda x: x['lastVisitTime'])
+        for interruption in sorted_interruptions:
+            insert_position = next(
+                (i for i, item in enumerate(line) if item['lastVisitTime'] > interruption['lastVisitTime']), len(line))
+            line.insert(insert_position, interruption)
+        interruption_buffer.clear()
+
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    audio_file = request.files['audio']
+    transcription = transcribe_audio(audio_file)
+    return jsonify({"transcription": transcription})
 
 
 if __name__ == '__main__':
-    from gevent import pywsgi
-    from geventwebsocket.handler import WebSocketHandler
-
     logging.info("Starting server on port 5000")
-    server = pywsgi.WSGIServer(('0.0.0.0', 5000), app, handler_class=WebSocketHandler)
+    server = pywsgi.WSGIServer(('localhost', 5000), app, handler_class=WebSocketHandler)
     server.serve_forever()

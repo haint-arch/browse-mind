@@ -30,8 +30,20 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
         const url = details.url;
         const visitTime = Date.now();
 
+        // Kiểm tra URL hợp lệ
+        if (!url || !isValidURL(url) || isExcludedURL(url) || isSearchURL(url)) {
+            console.warn('Invalid or excluded URL:', url);
+            return;
+        }
+
         // Lấy tiêu đề của trang web
         const title = await fetchPageTitle(url);
+
+        // Kiểm tra tiêu đề hợp lệ
+        if (!title) {
+            console.warn('Invalid title for URL:', url);
+            return;
+        }
 
         // Lưu vào IndexedDB
         const pageData = {
@@ -51,6 +63,15 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
         }
     }
 });
+
+function isValidURL(url) {
+    try {
+        new URL(url);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
 async function fetchPageTitle(url) {
     try {
@@ -100,6 +121,38 @@ function isSearchURL(url) {
     return searchEngines.some(engine => url.startsWith(engine));
 }
 
+function isExcludedURL(url) {
+    const excludedURLs = [
+        'chrome://new-tab-page-third-party/',
+        'chrome://settings/clearBrowserData',
+        'chrome://extensions/',
+        'chrome://settings/',
+        'chrome://history/',
+        'chrome://downloads/',
+        'chrome://bookmarks/',
+        'chrome://newtab/',
+        'chrome://flags/',
+        'chrome://version/',
+        'chrome://about/',
+        'chrome://help/',
+        'chrome://policy/',
+        'chrome://sync-internals/',
+        'chrome://inspect/',
+        'chrome://apps/',
+        'chrome://components/',
+        'chrome://gpu/',
+        'chrome://net-internals/',
+        'chrome://sandbox/',
+        'chrome://system/',
+        'chrome://tracing/',
+        'chrome://ukm/',
+        'chrome://user-actions/',
+        'chrome://webrtc-internals/'
+    ];
+
+    return excludedURLs.some(excluded => url.startsWith(excluded)) || url.startsWith('chrome://');
+}
+
 function saveHistoryToDB(url, visitTime) {
     openDatabase().then(db => {
         const tx = db.transaction('history', 'readwrite');
@@ -130,7 +183,7 @@ function saveAnalysisToDB(url, analysisResult) {
 
 function openDatabase() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('historyDB', 2);
+        const request = indexedDB.open('historyDB', 3);
 
         request.onupgradeneeded = event => {
             const db = event.target.result;
@@ -141,12 +194,16 @@ function openDatabase() {
             if (!store.indexNames.contains('is_embedded')) {
                 store.createIndex('is_embedded', 'is_embedded', { unique: false });
             }
+            if (!store.indexNames.contains('line_id')) {
+                store.createIndex('line_id', 'line_id', { unique: false });
+            }
         };
 
         request.onsuccess = event => resolve(event.target.result);
         request.onerror = event => reject(event.target.error);
     });
 }
+
 
 function getAllHistoryItems() {
     return new Promise((resolve, reject) => {
@@ -166,29 +223,89 @@ function getAllHistoryItems() {
     });
 }
 
-function updateProcessedItems(historyData) {
-    return new Promise((resolve, reject) => {
-        openDatabase().then(db => {
-            const tx = db.transaction('history', 'readwrite');
-            const store = tx.objectStore('history');
+async function updateProcessedItems(historyLines) {
+    try {
+        const db = await openDatabase();
+        const tx = db.transaction('history', 'readwrite');
+        const store = tx.objectStore('history');
 
-            historyData.forEach(item => {
-                const request = store.get(item.id);
-                request.onsuccess = () => {
-                    const record = request.result;
-                    if (record) {
-                        record.content = item.content;
-                        record.color = item.color;
-                        record.categories = item.categories;
-                        record.is_embedded = true;
-                        store.put(record);
+        console.log('Updating processed items 1:', historyLines);
+
+        // Flatten the nested array structure while preserving line_id
+        const updatePromises = historyLines.flatMap(line => {
+            console.log('Updating processed items 2:', line);
+            
+            // Each line is an array of items sharing the same line_id
+            return line.map(async item => {
+                try {
+                    // Check if item exists
+                    const existingItem = await get(store, item.id);
+                    
+                    if (existingItem) {
+                        // Update existing item while preserving line_id
+                        const updatedItem = {
+                            ...existingItem,
+                            ...item,
+                            is_embedded: true,
+                            line_id: item.line_id, // Ensure line_id is preserved
+                            prev_item: item.prev_item,
+                            next_item: item.next_item,
+                        };
+                        return put(store, updatedItem);
+                    } else {
+                        // Add new item with line_id
+                        return add(store, {
+                            ...item,
+                            is_embedded: true,
+                            line_id: item.line_id,
+                            prev_item: item.prev_item,
+                            next_item: item.next_item,
+                        });
                     }
-                };
+                } catch (error) {
+                    console.error(`Error processing item ${item.id}:`, error);
+                    throw error;
+                }
             });
+        });
 
-            tx.oncomplete = () => resolve();
-            tx.onerror = (event) => reject(event.target.error);
-        }).catch(error => reject(error));
+        // Wait for all updates to complete
+        await Promise.all(updatePromises);
+        
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = () => {
+                console.log('Successfully updated all items with line_id information');
+                resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (error) {
+        console.error('Error in updateProcessedItems:', error);
+        throw error;
+    }
+}
+
+function get(store, id) {
+    return new Promise((resolve, reject) => {
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function put(store, item) {
+    return new Promise((resolve, reject) => {
+        const request = store.put(item);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function add(store, item) {
+    return new Promise((resolve, reject) => {
+        const request = store.add(item);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 }
 
@@ -237,6 +354,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true; // Giữ kênh message mở để gửi phản hồi không đồng bộ
     }
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'getHistoryItem') {
+        openDatabase().then(db => {
+            const transaction = db.transaction(['history'], 'readonly');
+            const objectStore = transaction.objectStore('history');
+
+            let query;
+            if (typeof request.idOrUrl === 'string' && request.idOrUrl.startsWith('http')) {
+                query = objectStore.index('url').get(request.idOrUrl);
+            } else {
+                query = objectStore.get(request.idOrUrl);
+            }
+
+            query.onsuccess = (event) => {
+                const item = event.target.result;
+                if (item) {
+                    sendResponse({ item: item });
+                } else {
+                    sendResponse({ error: 'Item not found' });
+                }
+            };
+
+            query.onerror = (event) => {
+                console.error('Error fetching history item:', event.target.error);
+                sendResponse({ error: 'Error fetching history item' });
+            };
+        }).catch(error => {
+            console.error('Error opening database:', error);
+            sendResponse({ error: 'Error opening database' });
+        });
+
+        return true; // Indicates that the response is sent asynchronously
+    }
+    // ... (handle other actions)
 });
 
 async function storeHistoryItem(pageData) {
