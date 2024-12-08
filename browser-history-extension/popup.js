@@ -4,9 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let startTime;
     let elapsedTimeInterval;
     let audioChunks = [];
-    let socket;
-    let mediaRecorder;
 
+    const speechToTextLoading = document.getElementById('speechToTextLoading');
     const chatInput = document.getElementById('chatInput');
     const chatButton = document.getElementById('chatButton');
     const chatResponse = document.getElementById('chatResponse');
@@ -14,6 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const headerH2 = assistantHeader.querySelector('h2');
     const recordButton = document.getElementById('recordButton');
     const micIcon = document.getElementById('micIcon');
+    const settingsButton = document.getElementById('settingsButton');
+    const settingsDropdown = document.getElementById('settingsDropdown');
+    const softwareInfoItem = document.getElementById('softwareInfo');
+    const manageHistoryItem = document.getElementById('manageHistory');
 
     if (navigator.serviceWorker) {
         navigator.serviceWorker.ready.then(registration => {
@@ -39,6 +42,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function toggleDropdown(show) {
+        settingsButton.classList.toggle('active', show);
+        settingsDropdown.classList.toggle('show', show);
+    }
+
+    settingsButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isShowing = settingsDropdown.classList.contains('show');
+        toggleDropdown(!isShowing);
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
+            toggleDropdown(false);
+        }
+    });
+
+    // Add keyboard navigation
+    settingsDropdown.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            toggleDropdown(false);
+            settingsButton.focus();
+        }
+    });
+
+    function handleMenuItemClick(action) {
+        return () => {
+            toggleDropdown(false);
+            if (action === 'Software Info') {
+                chrome.tabs.create({ url: 'introduction.html' });
+            } else if (action === 'Manage History') {
+                chrome.tabs.create({ url: 'history-management.html' });
+            }
+        };
+    }
+
+    softwareInfoItem.addEventListener('click', handleMenuItemClick('Software Info'));
+    manageHistoryItem.addEventListener('click', handleMenuItemClick('Manage History'));
+
     function fetchHistoryFromIndexedDB() {
         return new Promise((resolve, reject) => {
             chrome.runtime.sendMessage({ action: 'getAllHistoryItems' }, (response) => {
@@ -50,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function uploadHistory() {
         try {
             setChatboxReadonly(true);
-            showLoadingAnimation(true, 'Uploading history...');
+            showLoadingAnimation(true, 'Đang tải lịch sử lên máy chủ...');
 
             let allItems = await fetchHistoryFromIndexedDB();
 
@@ -187,8 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const fullItem = await getFullHistoryItem(item.id);
                     return { ...item, ...fullItem };
                 }));
-                const responseElement = await createResponseElements(fullHistoryItems);
-                chatResponse.appendChild(responseElement);
+                for (const item of fullHistoryItems) {
+                    console.log('History item:', item);
+                    const responseElement = await createResponseElements([item]);
+                    chatResponse.appendChild(responseElement);
+                }
                 saveRecentChat(message, fullHistoryItems);
             } else {
                 throw new Error('Unexpected response format');

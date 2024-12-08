@@ -1,0 +1,78 @@
+\changefontsizes[16pt]{13pt}
+\pagestyle{plain}
+\chapter{Giới thiệu}
+\label{chap:intro}
+
+\section{Đặt vấn đề}
+
+Ngày nay, trong bối cảnh xã hội ngày càng số hóa mạnh mẽ và mọi khía cạnh của cuộc sống từ làm việc, học tập đến giải trí đều chuyển dịch sang môi trường trực tuyến, trình duyệt web đã trở thành một công cụ không thể thiếu đối với con người. Chính vì điều này dẫn đến sự gia tăng nhanh chóng về khối lượng thông tin được người dùng truy cập, tạo nên một lượng lớn dữ liệu lịch sử duyệt web. Tuy nhiên, nhu cầu tìm kiếm lại các trang web đã truy cập một cách nhanh chóng, chính xác và hiệu quả đang đặt ra nhiều thách thức đối với người dùng. Mặc dù các trình duyệt hiện nay đã cung cấp tính năng lưu trữ lịch sử duyệt web, nhưng vẫn tồn tại nhiều hạn chế. Điều này bắt nguồn từ ba nguyên nhân chính.
+
+\textit{Nguyên nhân thứ nhất}, khối lượng lịch sử duyệt web ngày càng lớn do tần suất sử dụng trình duyệt cao. Người dùng thường xuyên phải tìm kiếm lại các trang web đã truy cập, nhưng việc ghi nhớ các từ khóa chính xác hoặc thời điểm cụ thể là điều không dễ dàng. 
+
+\textit{Nguyên nhân thứ hai}, các công cụ tìm kiếm lịch sử hiện tại trên trình duyệt chỉ hỗ trợ truy vấn đơn giản dựa trên tiêu đề hoặc URL, chưa đáp ứng được nhu cầu tìm kiếm dựa trên các đặc điểm như nội dung trang web, màu sắc giao diện, hoặc thời gian truy cập tương đối. Điều này dẫn đến việc người dùng mất nhiều thời gian để tìm kiếm thông tin mình cần.
+
+\textit{Và cuối cùng}, trong một số trường hợp, người dùng cần quản lý và phân loại lịch sử duyệt web theo các nhóm liên quan hoặc tìm kiếm thông tin dựa trên mô tả ngữ nghĩa tự nhiên. Tuy nhiên, các trình duyệt chưa có tính năng hỗ trợ tự động hóa các tác vụ này, khiến người dùng phải thao tác thủ công, tốn nhiều công sức và thời gian. 
+
+Hiện tại, việc tìm kiếm lịch sử duyệt web vẫn còn nhiều hạn chế, và nhu cầu có một giải pháp thông minh hơn là rất cần thiết. Giải pháp này không chỉ cần hỗ trợ truy vấn lịch sử nhanh chóng, chính xác, mà còn phải linh hoạt trong việc phân loại, gợi ý thông tin phù hợp và cải thiện trải nghiệm người dùng. Do đó, giải pháp truy vấn lịch sử duyệt web bằng học máy ra đời nhằm khắc phục những vấn đề hiện tại, nâng cao hiệu quả và sự tiện dụng trong quá trình tìm kiếm lịch sử duyệt web.
+
+\section{Phân tích thực trạng}
+
+Trong bối cảnh số hóa đang ngày càng phát triển, trình duyệt web không chỉ đóng vai trò là công cụ truy cập Internet mà còn là phương tiện chính để người dùng tương tác với các hệ thống số. Mặc dù có sự phổ biến rộng rãi và khả năng hỗ trợ người dùng cơ bản, các trình duyệt hiện nay vẫn tồn tại nhiều hạn chế khi xử lý khối lượng lớn dữ liệu lịch sử duyệt web và các yêu cầu tìm kiếm phức tạp. Những hạn chế này đã được nhận diện qua các phân tích thực trạng cụ thể như sau:
+
+\subsection{Khối lượng dữ liệu lớn và sự thiếu tổ chức}
+Trung bình mỗi người dùng Internet dành hơn \textbf{6 giờ mỗi ngày} trên các thiết bị số \cite{datareportal2024vietnam}. Tại Việt Nam, số lượng người dùng Internet đã đạt \textbf{77,93 triệu người}, tương ứng với \textbf{79,1\%} dân số \cite{datareportal2024vietnam}. Mỗi người dùng truy cập hàng trăm trang web mỗi tuần với các mục đích khác nhau, dẫn đến việc tích lũy một lượng lớn dữ liệu lịch sử duyệt web. Tuy nhiên, các trình duyệt hiện nay không cung cấp cơ chế đủ mạnh để tự động tổ chức và quản lý lượng dữ liệu khổng lồ này. Điều này khiến người dùng gặp khó khăn trong việc tìm lại các trang web quan trọng, đặc biệt khi cần truy vấn lịch sử đã lưu từ trước đó.
+
+\subsection{Hạn chế trong công cụ tìm kiếm và quản lý lịch sử}
+
+Mặc dù các trình duyệt hiện nay đã tích hợp các công cụ tìm kiếm lịch sử cơ bản, nhưng các tính năng này chủ yếu chỉ hỗ trợ tìm kiếm theo các yếu tố đơn giản như tiêu đề, URL và số lần truy cập. Điều này tạo ra khó khăn khi người dùng không nhớ chính xác tiêu đề hoặc địa chỉ URL của trang web đã truy cập. Hệ thống tìm kiếm hiện tại thiếu khả năng xử lý các tìm kiếm phức tạp hơn, chẳng hạn như tìm kiếm dựa trên nội dung trang web, màu sắc giao diện hoặc thời gian truy cập tương đối. Điều này khiến người dùng gặp khó khăn trong việc truy xuất lại các trang đã xem, đặc biệt khi không có những thông tin cơ bản như tiêu đề hoặc URL. 
+
+Các công cụ tìm kiếm lịch sử trong trình duyệt không cung cấp các tính năng tìm kiếm nâng cao, chẳng hạn như khả năng nhận diện nội dung chính của các trang web đã duyệt hoặc gợi ý các trang web có màu sắc hoặc chủ đề tương tự. Do đó, việc tìm kiếm thông tin trong một lượng lớn lịch sử duyệt web trở nên khó khăn và tốn thời gian, đặc biệt đối với những người dùng có nhu cầu tìm kiếm phức tạp hoặc khi muốn tìm lại các trang web có chủ đề liên quan.
+
+\begin{itemize}
+    \item \textbf{Microsoft Edge} và \textbf{Mozilla Firefox}: Các trình duyệt này chỉ hỗ trợ tìm kiếm lịch sử dựa trên các yếu tố cơ bản như tên trang, URL, và số lần truy cập. Tuy nhiên, các tính năng tìm kiếm này chưa hỗ trợ tìm kiếm nâng cao dựa trên nội dung trang, màu sắc hoặc thời gian.
+    
+    \item \textbf{Google Chrome}: Chrome nổi bật hơn với tính năng \textbf{``Nhóm lịch sử''} (trước đây gọi là \textit{``Hành trình''}), được giới thiệu vào năm 2022. Tính năng này tự động nhóm các trang web liên quan dựa trên chủ đề hoặc hoạt động duyệt web của người dùng, giúp việc tìm lại thông tin trở nên dễ dàng hơn. Đặc biệt, tính năng này không chỉ hoạt động với \textit{Google Search} mà còn hỗ trợ cả các công cụ tìm kiếm khác, nâng cao khả năng quản lý lịch sử duyệt web cho người dùng \cite{chrome_journeys}.
+\end{itemize}
+
+Tuy nhiên, ngay cả với tính năng nhóm lịch sử này, các trình duyệt vẫn còn thiếu một số khả năng quan trọng:
+
+\begin{itemize}
+    \item \textbf{Thiếu khả năng phân loại thông minh:} Các trình duyệt hiện nay chưa hỗ trợ phân loại tự động lịch sử duyệt web thành các danh mục như ``học tập,'' ``giải trí,'' ``mua sắm,'' hay ``công việc.'' Điều này khiến người dùng phải tự quản lý thủ công, gây mất thời gian và giảm hiệu quả.
+    
+    \item \textbf{Gợi ý thông minh còn hạn chế:} Các hệ thống quản lý lịch sử chưa thể đưa ra các gợi ý về trang web liên quan dựa trên hành vi duyệt web trước đó. Ví dụ, một người đang nghiên cứu một chủ đề cụ thể có thể không nhận được gợi ý phù hợp từ những trang web đã truy cập trước đây có nội dung tương đồng.
+    
+    \item \textbf{Hiển thị lịch sử chưa trực quan:} Các trình duyệt chưa cung cấp giao diện hiển thị lịch sử dưới dạng dòng thời gian hoặc nhóm chủ đề rõ ràng. Điều này làm cho người dùng khó theo dõi và quản lý các hoạt động duyệt web một cách hiệu quả.
+\end{itemize}
+
+Những hạn chế trên cho thấy sự cần thiết của việc cải tiến hệ thống quản lý lịch sử duyệt web, nhằm mang lại trải nghiệm tốt hơn và tăng cường khả năng truy xuất thông tin cho người dùng.
+
+\section{Mục tiêu khóa luận}
+
+Với sự gia tăng nhanh chóng của lượng dữ liệu trên Internet, việc quản lý và tìm kiếm lịch sử duyệt web trở thành một vấn đề ngày càng quan trọng đối với người dùng. Khóa luận này tập trung vào việc xây dựng một hệ thống quản lý lịch sử duyệt web thông minh, giúp người dùng dễ dàng tìm kiếm lại các trang web đã truy cập, phân loại các trang web vào các danh mục phù hợp và cải thiện trải nghiệm duyệt web tổng thể.
+
+Hệ thống sẽ được thiết kế để giải quyết một số vấn đề nổi bật trong việc quản lý lịch sử duyệt web hiện tại, bao gồm:
+\begin{itemize}
+    \item \textbf{Tìm kiếm nâng cao}: Hệ thống sẽ cung cấp tính năng tìm kiếm lịch sử duyệt web dựa trên các yếu tố không chỉ dừng lại ở tiêu đề và URL mà còn mở rộng ra các yếu tố như nội dung chính của trang web, màu sắc giao diện và thời gian truy cập. Điều này giúp người dùng có thể dễ dàng tìm lại các trang web ngay cả khi không nhớ rõ tiêu đề hoặc URL.
+    
+    \item \textbf{Phân loại lịch sử duyệt web tự động}: Một trong những tính năng quan trọng của hệ thống là khả năng phân loại lịch sử duyệt web vào các danh mục như ``giải trí,'' ``học tập,'' ``mua sắm,'' ``công việc,'' và nhiều hơn nữa. Việc phân loại tự động này sẽ giúp người dùng quản lý và theo dõi các hoạt động duyệt web hiệu quả hơn, tiết kiệm thời gian và giảm thiểu sự rối loạn trong lịch sử duyệt web.
+    
+    \item \textbf{Gợi ý thông minh}: Hệ thống sẽ cung cấp các gợi ý thông minh dựa trên hành vi duyệt web của người dùng. Điều này có nghĩa là người dùng sẽ nhận được các gợi ý về các trang web liên quan, giúp họ tiếp cận thông tin mới một cách nhanh chóng và thuận tiện.
+    
+    \item \textbf{Nhóm lịch sử duyệt web}: Hệ thống sẽ cho phép người dùng xem lịch sử duyệt web được nhóm lại theo chủ đề hoặc hoạt động tương đồng. Tính năng này, lấy cảm hứng từ các công cụ như \textit{Google Chrome's Group History}, sẽ giúp người dùng dễ dàng theo dõi chuỗi các trang web liên quan và phục vụ nhu cầu truy vấn thông tin hiệu quả hơn.
+\end{itemize}
+
+Mục tiêu của khóa luận này là không chỉ nâng cao hiệu quả trong việc tìm kiếm và quản lý lịch sử duyệt web mà còn tạo ra một công cụ mạnh mẽ giúp người dùng duyệt web một cách thông minh và an toàn hơn. Hệ thống này sẽ mang lại một bước tiến quan trọng trong việc tối ưu hóa trải nghiệm duyệt web và giúp người dùng tiết kiệm thời gian, tăng cường hiệu suất làm việc và dễ dàng truy xuất lại thông tin quan trọng từ lịch sử duyệt web của mình.
+
+\section{Cấu trúc khóa luận}
+
+Phần còn lại của khóa luận có cấu trúc như sau:
+
+\textbf{Chương~\ref{chap:base_knowledge}} cung cấp nền tảng lý thuyết, bao gồm các khái niệm cốt lõi về hệ thống tìm kiếm, thuật toán xử lý văn bản, phương pháp đo lường sự tương đồng giữa các văn bản, và công nghệ chính được áp dụng trong nghiên cứu.
+
+\textbf{Chương~\ref{chap:implement}} tập trung mô tả quá trình thiết kế và xây dựng công cụ, nhấn mạnh vào kiến trúc tổng quan của hệ thống và cách thức xử lý dữ liệu lịch sử duyệt web.
+
+\textbf{Chương~\ref{chap:query_processing}} trình bày chi tiết về xử lý truy vấn và đánh giá mức độ tương đồng. Các nội dung chính bao gồm kiểm tra phạm vi câu hỏi, xử lý thông tin đầu vào từ người dùng, và các phương pháp tính điểm để đưa ra kết quả tìm kiếm chính xác.
+
+\textbf{Chương~\ref{chap:experiments}} trình bày các thử nghiệm được thực hiện để đánh giá hệ thống, bao gồm quy trình kiểm thử, chỉ số đo lường hiệu quả, và phân tích chi tiết kết quả nhằm làm rõ hiệu suất và tiềm năng ứng dụng thực tiễn.
+
+Cuối cùng, \textbf{Chương~\ref{chap:conclusion}} tóm tắt những đóng góp đạt được trong khóa luận, đồng thời đưa ra các định hướng phát triển và mở rộng hệ thống trong tương lai.

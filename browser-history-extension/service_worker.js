@@ -25,25 +25,62 @@ function extractColorsFromPage(doc) {
     return [...new Set(styles)];
 }
 
+async function deleteHistoryItem(id) {
+    try {
+        const db = await openDatabase();
+        const tx = db.transaction('history', 'readwrite');
+        const store = tx.objectStore('history');
+
+        await new Promise((resolve, reject) => {
+            const request = store.delete(id);
+            request.onsuccess = resolve;
+            request.onerror = () => reject(request.error);
+        });
+
+        console.log(`History item with id ${id} deleted successfully`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting history item:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Function to update a history item
+async function updateHistoryItem(item) {
+    try {
+        const db = await openDatabase();
+        const tx = db.transaction('history', 'readwrite');
+        const store = tx.objectStore('history');
+
+        await new Promise((resolve, reject) => {
+            const request = store.put(item);
+            request.onsuccess = resolve;
+            request.onerror = () => reject(request.error);
+        });
+
+        console.log(`History item with id ${item.id} updated successfully`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating history item:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 chrome.webNavigation.onCompleted.addListener(async (details) => {
     if (details.frameId === 0) { // Chỉ xử lý khi toàn bộ trang web đã tải xong (không phải iframe)
-        const url = details.url;
+        const { tabId, url } = details;
         const visitTime = Date.now();
-
         // Kiểm tra URL hợp lệ
-        if (!url || !isValidURL(url) || isExcludedURL(url) || isSearchURL(url)) {
-            console.warn('Invalid or excluded URL:', url);
+        if (!url || !isValidURL(url) || isExcludedURL(url) || isSearchURL(url) || isRedirectURL(url)) {
+            console.warn('Invalid, excluded, search, or redirect URL:', url);
             return;
         }
 
         // Lấy tiêu đề của trang web
-        const title = await fetchPageTitle(url);
-
-        // Kiểm tra tiêu đề hợp lệ
-        if (!title) {
-            console.warn('Invalid title for URL:', url);
-            return;
-        }
+        const tab = await chrome.tabs.get(tabId);
+        const title = tab.title || 'No title found';
+        console.log('URL:', url);
+        console.log('Title:', title);
 
         // Lưu vào IndexedDB
         const pageData = {
@@ -55,10 +92,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
         const id = await storeHistoryItem(pageData);
         pageData.id = id;
 
-        console.log('Page loaded:', pageData);
-
         if (!isSearchURL(url)) {
-            // Gửi bản ghi mới về backend API /upload_history
             uploadHistory([pageData]);
         }
     }
@@ -123,34 +157,44 @@ function isSearchURL(url) {
 
 function isExcludedURL(url) {
     const excludedURLs = [
-        'chrome://new-tab-page-third-party/',
-        'chrome://settings/clearBrowserData',
-        'chrome://extensions/',
-        'chrome://settings/',
-        'chrome://history/',
-        'chrome://downloads/',
-        'chrome://bookmarks/',
-        'chrome://newtab/',
-        'chrome://flags/',
-        'chrome://version/',
-        'chrome://about/',
-        'chrome://help/',
-        'chrome://policy/',
-        'chrome://sync-internals/',
-        'chrome://inspect/',
-        'chrome://apps/',
-        'chrome://components/',
-        'chrome://gpu/',
-        'chrome://net-internals/',
-        'chrome://sandbox/',
-        'chrome://system/',
-        'chrome://tracing/',
-        'chrome://ukm/',
-        'chrome://user-actions/',
-        'chrome://webrtc-internals/'
+        'chrome://',
+        'edge://',
+        'about:',
+        'chrome-extension://',
+        'moz-extension://',
+        'file://',
+        'view-source:',
+        'data:',
+        'javascript:'
     ];
 
     return excludedURLs.some(excluded => url.startsWith(excluded)) || url.startsWith('chrome://');
+}
+
+function isRedirectURL(url) {
+    const redirectDomains = [
+        't.co',
+        'bit.ly',
+        'goo.gl',
+        'tinyurl.com',
+        'ow.ly',
+        'is.gd',
+        'buff.ly',
+        'adf.ly',
+        'tiny.cc',
+        'lnkd.in',
+        'db.tt',
+        'qr.ae',
+        'branch.io'
+    ];
+
+    try {
+        const urlObj = new URL(url);
+        return redirectDomains.some(domain => urlObj.hostname === domain || urlObj.hostname.endsWith('.' + domain));
+    } catch (e) {
+        console.error('Invalid URL:', url);
+        return false;
+    }
 }
 
 function saveHistoryToDB(url, visitTime) {
@@ -353,6 +397,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ error: error.message });
         });
         return true; // Giữ kênh message mở để gửi phản hồi không đồng bộ
+    } else if (message.action === 'deleteHistoryItem') {
+        deleteHistoryItem(message.id).then(sendResponse);
+        return true; // Keep the message channel open for the asynchronous response
+    } else if (message.action === 'updateHistoryItem') {
+        updateHistoryItem(message.item).then(sendResponse);
+        return true; // Keep the message channel open for the asynchronous response
     }
 });
 
@@ -397,11 +447,18 @@ async function storeHistoryItem(pageData) {
     const tx = db.transaction('history', 'readwrite');
     const store = tx.objectStore('history');
 
-    return new Promise((resolve, reject) => {
-        const request = store.add(pageData);
-        request.onsuccess = (event) => resolve(event.target.result);
-        request.onerror = (event) => reject(event.target.error);
-    });
+    // Check if the item already exists
+    const existingItem = await get(store, pageData.url);
+    
+    if (existingItem) {
+        // If the item exists, increment the visit count
+        pageData.visitCount = (existingItem.visitCount || 0) + 1;
+        return put(store, pageData);
+    } else {
+        // If it's a new item, set the initial visit count to 1
+        pageData.visitCount = 1;
+        return add(store, pageData);
+    }
 }
 
 // Hàm để lấy lịch sử trình duyệt trong một tháng qua và lưu vào DB

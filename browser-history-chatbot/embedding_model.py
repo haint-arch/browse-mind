@@ -328,19 +328,23 @@ def semantic_search(query_embedding, vectorstore, filtered_history, k=1):
 # Methods for prompt-based API calls
 def extract_summary(input_text):
     prompt = f"""
-        Summarize the following content in vietnamese:
+    Summarize the following content in Vietnamese:
 
-        {input_text}
+    {input_text}
 
-        Output the result only.
-        """
-
+    Output the result only.
+    """
     data = {
-        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}]
     }
+
     try:
-        response = requests.post(api_url, headers=headers, json=data)
+        response = requests.post(
+            api_url,
+            headers=headers,
+            json=data
+        )
         response.raise_for_status()
         result = response.json()
 
@@ -351,21 +355,14 @@ def extract_summary(input_text):
             logging.error("Unexpected API response format.")
             return None
 
-    except requests.exceptions.HTTPError as err:
-        logging.error(f"HTTP error occurred: {err}")
     except requests.exceptions.RequestException as err:
         logging.error(f"Error occurred: {err}")
-    except KeyError as err:
-        logging.error(f"KeyError: {err} in API response")
-    except json.JSONDecodeError as err:
-        logging.error(f"JSONDecodeError: {err} in API response")
-
     return None
 
 
 def classify_website(title, content):
     prompt = f"""
-        Classify the website into one or more of the following categories: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home.
+        Classify the website into one or more of the following categories: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home, cooking, logistics.
 
         Title: {title}
         Content: {content}
@@ -379,7 +376,7 @@ def classify_website(title, content):
     """
 
     data = {
-        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}]
     }
     try:
@@ -397,7 +394,7 @@ def classify_website(title, content):
                 for category in result:
                     if category in ["entertainment", "music", "news", "social media", "education", "tech", "health",
                                     "shopping", "finance", "travel", "productivity", "forums", "sports", "food",
-                                    "science", "home"]:
+                                    "science", "home", "cooking", "logistics"]:
                         valid_categories.append(category)
                     else:
                         logging.error("Invalid category: %s", category)
@@ -446,7 +443,7 @@ def extract_features(input_text):
              - `end_date`: {time_one_month_ago}
              - `rank`: -1
            - For specific time references like "hôm qua 7h tối" (yesterday at 7 PM) and today is {time_now}:
-             - Calculate the exact time range
+             - Calculate the exact time range based on the reference, start_date = value - 1 hour, end_date = value + 1 hour
              - `value`: "2021-07-01T19:00:00"
              - `start_date`: "2021-07-01T18:00:00"
              - `end_date`: "2021-07-01T20:00:00"
@@ -464,17 +461,34 @@ def extract_features(input_text):
 
         4. **content** - Extract the core focus or topic, often found after "nội dung chính là" (main content is) or "về" (about).
 
-        5. **category** - Classify into: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home.
+        5. **category** - Classify into: entertainment, music, news, social media, education, tech, health, shopping, finance, travel, productivity, forums, sports, food, science, home, cooking, logistics.
 
-        Example Input: "Tìm cho tôi website truy cập gần đây nhất có tiêu đề liên quan đến công nghệ và màu chủ đạo là xanh lá cây."
+        - Example Input 1: "Tìm cho tôi website truy cập gần đây nhất có tiêu đề liên quan đến công nghệ và màu chủ đạo là xanh lá cây."
 
-        Expected JSON Output:
+        Expected JSON Output 1:
         {{
           "time": {{
             "original": "gần đây nhất",
             "value": null,
             "start_date": "{time_one_month_ago}",
             "end_date": "{time_now}",
+            "rank": 1
+          }},
+          "title": "liên quan đến công nghệ",
+          "color": [0, 255, 0],
+          "content": null,
+          "category": "tech"
+        }}
+        
+        - Example Input: "Tìm cho tôi website truy cập lúc 8h sáng ngày 28/11/2024 có tiêu đề liên quan đến công nghệ và màu chủ đạo là xanh lá cây."
+
+        Expected JSON Output:
+        {{
+          "time": {{
+            "original": "8h sáng hôm nay",
+            "value": null,
+            "start_date": "2024-11-28T07:00:00",
+            "end_date": "2024-11-28T09:00:00",
             "rank": 1
           }},
           "title": "liên quan đến công nghệ",
@@ -489,7 +503,7 @@ def extract_features(input_text):
         """
 
     data = {
-        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}]
     }
     try:
@@ -522,7 +536,7 @@ def is_question_within_scope(question):
 
     # Prepare the payload for the API request
     data = {
-        "model": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}]
     }
 
@@ -635,7 +649,7 @@ def chatbot():
                         (item, calculate_time_score(query_time, item['lastVisitTime'], 2592000))
                         for item in history_data
                     ]
-                    top_results['time'] = sorted(time_results, key=lambda x: x[1])[:10]
+                    top_results['time'] = sorted(time_results, key=lambda x: x[1], reverse=True)[:10]
                 # For most recent or second most recent
                 elif rank > 0:
                     # Takes all the top N ranks
@@ -692,10 +706,10 @@ def chatbot():
                 category_score = next((score for i, score in top_results['category'] if i == item), 0)
 
                 total_score = (
-                    0.4 * title_score +
-                    0.4 * content_score +
+                    0.35 * title_score +
+                    0.35 * content_score +
                     0.1 * time_score +
-                    0.05 * color_score +
+                    0.1 * color_score +
                     0.05 * category_score
                 )
 
@@ -706,7 +720,7 @@ def chatbot():
 
             # Return the top result(s)
             if sorted_results:
-                top_results = sorted_results[:1]  # Adjust this if you want to return more than one result
+                top_results = sorted_results[:3]  # Adjust this if want to return more than one result
                 response = []
                 for match, score in top_results:
                     logging.info("Match: %s, score: %f", match['title'], score)
@@ -725,6 +739,7 @@ def chatbot():
             return jsonify({'response': "Không thể trích xuất đặc trưng từ câu hỏi."})
     else:
         return jsonify({'response': "Câu hỏi này không liên quan đến lịch sử duyệt web."})
+
 
 def save_history_to_json(new_history_data):
     file_path = 'history_data.json'
@@ -791,7 +806,7 @@ def upload_history():
         return jsonify({'status': 'error', 'message': 'No history data provided'}), 400
 
     # Lọc các bản ghi trùng lặp
-    new_history_data = filter_duplicate_history(new_history_data)
+    # new_history_data = filter_duplicate_history(new_history_data)
     logging.info("Received %d new history items", len(new_history_data))
 
     # Xử lý tất cả các bản ghi trong new_history_data

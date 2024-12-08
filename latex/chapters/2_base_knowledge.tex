@@ -1,0 +1,76 @@
+\chapter{Cơ sở lý thuyết}
+\label{chap:base_knowledge}
+
+Trong chương này, chúng ta sẽ thảo luận về hai khía cạnh quan trọng liên quan đến hệ thống được xây dựng: tiện ích mở rộng trình duyệt (browser extension) và các khái niệm cơ bản về học máy và xử lý ngôn ngữ tự nhiên. Nội dung bao gồm định nghĩa, điểm mạnh, cấu trúc phát triển của các tiện ích mở rộng, cũng như các mô hình học máy và các ứng dụng trong phân tích lịch sử duyệt web.
+
+\section{Tiện ích mở rộng trình duyệt}
+
+Tiện ích mở rộng trình duyệt là các ứng dụng nhỏ được phát triển để mở rộng tính năng của trình duyệt web, cung cấp các chức năng bổ sung hoặc tùy chỉnh giao diện và hành vi của trình duyệt. Các tiện ích mở rộng này hoạt động dựa trên giao diện lập trình ứng dụng (API) do các trình duyệt cung cấp, cho phép truy cập và tương tác với các thành phần của trình duyệt hoặc nội dung của trang web.
+
+\subsection{Điểm mạnh của tiện ích mở rộng}
+
+Tiện ích mở rộng có nhiều ưu điểm vượt trội, đặc biệt trong việc nâng cao trải nghiệm người dùng và tối ưu hóa hiệu suất trình duyệt:
+\begin{itemize}
+    \item \textbf{Khả năng tùy chỉnh:} Người dùng có thể tùy chỉnh giao diện và hành vi trình duyệt theo nhu cầu cá nhân.
+    \item \textbf{Tích hợp dễ dàng:} Các tiện ích mở rộng hoạt động liền mạch trên trình duyệt mà không yêu cầu cài đặt phần mềm bổ sung.
+    \item \textbf{Tiện lợi:} Cung cấp các chức năng bổ sung mà trình duyệt mặc định không có, như quản lý lịch sử, ghi chú, hoặc đồng bộ hóa dữ liệu.
+    \item \textbf{Bảo mật:} Tiện ích mở rộng hiện đại được thiết kế với các chính sách bảo mật nghiêm ngặt, giúp bảo vệ người dùng khỏi các rủi ro tiềm ẩn.
+\end{itemize}
+
+\subsection{Cấu trúc phát triển của tiện ích mở rộng}
+
+Một tiện ích mở rộng trình duyệt thường bao gồm các thành phần chính sau:
+\begin{itemize}
+    \item \textbf{Tệp cấu hình (\texttt{manifest.json}):} Chứa thông tin cơ bản về tiện ích, bao gồm quyền truy cập, tệp JavaScript, và các thành phần khác.
+    \item \textbf{Giao diện người dùng (UI):} Bao gồm các tệp HTML, CSS, và JavaScript để hiển thị và tương tác với người dùng.
+    \item \textbf{Tập lệnh nền (Background Script):} Xử lý các sự kiện quan trọng như truy vấn dữ liệu, lắng nghe thay đổi, và giao tiếp với backend.
+    \item \textbf{Tập lệnh nội dung (Content Script):} Tương tác trực tiếp với nội dung của trang web, như trích xuất dữ liệu hoặc thay đổi giao diện hiển thị.
+    \item \textbf{Quyền và chính sách bảo mật:} Xác định quyền truy cập và đảm bảo dữ liệu của người dùng được bảo vệ.
+    \item \textbf{Phân phối và cập nhật:} Sau khi phát triển, tiện ích được đóng gói và đăng tải lên các cửa hàng trực tuyến như \textit{Chrome Web Store} hoặc \textit{Mozilla Add-ons}.
+\end{itemize}
+
+\subsection{Ứng dụng trong hệ thống}
+
+Trong khóa luận này, tiện ích mở rộng được sử dụng để:
+\begin{itemize}
+    \item Thu thập dữ liệu lịch sử duyệt web từ trình duyệt và gửi đến backend để phân tích.
+    \item Hiển thị kết quả phân tích, bao gồm các nhóm lịch sử (history lines) và gợi ý thông minh.
+    \item Tạo giao diện người dùng thân thiện để hỗ trợ việc tìm kiếm và quản lý lịch sử.
+\end{itemize}
+
+\section{Học máy và xử lý ngôn ngữ tự nhiên}
+
+\subsection{Học máy (Machine Learning)}
+
+Học máy là một nhánh của trí tuệ nhân tạo (AI), cho phép máy tính học hỏi và đưa ra quyết định dựa trên dữ liệu. Các ứng dụng học máy trong hệ thống này bao gồm:
+\begin{itemize}
+    \item Phân tích và trích xuất các đặc điểm từ lịch sử duyệt web, như tiêu đề, nội dung chính, màu sắc, và thời gian truy cập.
+    \item Xây dựng hệ thống gợi ý thông minh để đề xuất các lịch sử liên quan dựa trên hành vi người dùng.
+    \item Tính toán và đánh giá mức độ tương đồng giữa các bản ghi lịch sử để nhóm chúng thành các "line lịch sử."
+\end{itemize}
+
+\subsection{Xử lý ngôn ngữ tự nhiên (NLP)}
+
+Xử lý ngôn ngữ tự nhiên (Natural Language Processing) là lĩnh vực nghiên cứu cách máy tính tương tác với ngôn ngữ con người. Trong hệ thống này, NLP được áp dụng để:
+\begin{itemize}
+    \item Trích xuất thông tin từ các câu hỏi hoặc mô tả của người dùng.
+    \item Phân tích nội dung chính của các trang web để tạo embedding cho các tính năng tìm kiếm.
+    \item Gợi ý các nhóm lịch sử dựa trên nội dung văn bản và ngữ cảnh.
+\end{itemize}
+
+\subsection{Các công cụ và mô hình sử dụng}
+
+\begin{itemize}
+    \item \textbf{Transformers:} Sử dụng các mô hình ngôn ngữ như BERT hoặc RoBERTa để tính toán embeddings cho nội dung và tiêu đề trang web.
+    \item \textbf{Faiss:} Công cụ tìm kiếm dựa trên vector, giúp xử lý và so khớp các embeddings để tìm kiếm lịch sử liên quan.
+    \item \textbf{BeautifulSoup và OpenCV:} Phân tích nội dung và trích xuất màu sắc chủ đạo từ các trang web.
+\end{itemize}
+
+\subsection{Ứng dụng trong hệ thống}
+
+Học máy và xử lý ngôn ngữ tự nhiên đóng vai trò trung tâm trong hệ thống, hỗ trợ:
+\begin{itemize}
+    \item Phân loại lịch sử duyệt web theo các danh mục như học tập, giải trí, công việc, hoặc mua sắm.
+    \item Xây dựng hệ thống gợi ý thông minh, giúp người dùng tìm lại các lịch sử liên quan dựa trên các mô tả ngắn gọn.
+    \item Tăng cường trải nghiệm người dùng bằng các tính năng tìm kiếm nâng cao và phân tích dữ liệu tự động.
+\end{itemize}

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Lịch sử Duyệt Web</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #4caf50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .filters {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+        }
+        .filter-group label {
+            margin-right: 10px;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            margin: 0 5px;
+        }
+        .loading {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            max-width: 80%;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+        .popup h2 {
+            color: #4caf50;
+            margin-top: 0;
+        }
+        .popup-content {
+            margin-bottom: 20px;
+        }
+        .popup-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #888;
+        }
+        .truncate {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .table-container {
+            position: relative;
+        }
+        .action-column {
+            width: 100px;
+            text-align: center;
+        }
+
+        .action-buttons {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .edit-btn, .delete-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            transition: transform 0.2s;
+        }
+
+        .edit-btn:hover, .delete-btn:hover {
+            transform: scale(1.2);
+        }
+
+        .edit-btn svg {
+            fill: #4CAF50;
+        }
+
+        .delete-btn svg {
+            fill: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Quản lý Lịch sử Duyệt Web</h1>
+        <div class="filters">
+            <div class="filter-group">
+                <label for="category">Danh mục:</label>
+                <select id="category">
+                    <option value="">Tất cả</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="line-id">Line ID:</label>
+                <select id="line-id">
+                    <option value="">Tất cả</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="start-date">Từ ngày:</label>
+                <input type="date" id="start-date">
+            </div>
+            <div class="filter-group">
+                <label for="end-date">Đến ngày:</label>
+                <input type="date" id="end-date">
+            </div>
+            <div class="filter-group">
+                <label for="search">Tìm kiếm:</label>
+                <input type="text" id="search" placeholder="URL hoặc tiêu đề">
+            </div>
+        </div>
+        <div class="table-container">
+            <div class="loading-overlay" style="display: none;">
+                <div class="spinner"></div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tiêu đề</th>
+                        <th>URL</th>
+                        <th>Danh mục</th>
+                        <th>Line ID</th>
+                        <th>Thời gian truy cập</th>
+                        <th class="action-column">Hoạt động</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body">
+                    <!-- History items will be inserted here -->
+                </tbody>
+            </table>
+            <div class="pagination">
+                <button id="prev-page">Trang trước</button>
+                <span id="page-info"></span>
+                <button id="next-page">Trang sau</button>
+            </div>
+        </div>  
+    </div>
+    <div id="popup" class="popup">
+        <span class="popup-close">&times;</span>
+        <h2>Chi tiết bản ghi lịch sử</h2>
+        <div id="popup-content" class="popup-content"></div>
+    </div>
+    <script src="history-management.js"></script>
+</body>
+</html>
+
