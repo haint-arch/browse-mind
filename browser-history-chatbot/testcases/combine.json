@@ -1,0 +1,83 @@
+[
+    {
+      "query": "Tìm cho tôi website với tiêu đề Luyện thi TOEIC và thời gian sáng nay mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website có nội dung chính về học lập trình C++ và màu sắc xanh lá cây mà tôi từng truy cập",
+      "expected": "https://topdev.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Duolingo học ngoại ngữ và thời gian 9h sáng ngày 15/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc đỏ và nội dung chính về các công nghệ mới mà tôi từng truy cập",
+      "expected": "https://www.wired.com"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Tin tức tài chính và thời gian 14h ngày 19/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.tinmoi.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Strawberries và màu sắc hồng mà tôi từng truy cập",
+      "expected": "https://vi.wikipedia.org/wiki/Strawberries"
+    },
+    {
+      "query": "Tìm cho tôi website có nội dung chính về cải thiện kỹ năng nghe và màu sắc xanh dương mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc vàng và nội dung chính về cách nấu món ăn mà tôi từng truy cập",
+      "expected": "https://www.dienmayxanh.com"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Quán bún riêu và thời gian tối qua mà tôi từng truy cập",
+      "expected": "https://www.foody.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Jack Wikipedia và thời gian sáng hôm qua mà tôi từng truy cập",
+      "expected": "https://vi.wikipedia.org/wiki/Jack_(ca_sĩ)"
+    },
+    {
+      "query": "Tìm cho tôi website có nội dung chính về học từ vựng tiếng Anh và màu sắc xám mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xanh lá cây và thời gian 7h30 sáng ngày 20/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tìm cho tôi website có nội dung chính về lịch thi TOEIC và màu sắc đỏ mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Kết quả bóng đá hôm nay và màu sắc cam mà tôi từng truy cập",
+      "expected": "https://www.foxsports.com"
+    },
+    {
+      "query": "Tìm cho tôi website có nội dung chính về các bước học tiếng Anh hiệu quả và thời gian 16h30 ngày 20/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Duolingo học ngoại ngữ và màu sắc vàng mà tôi từng truy cập",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc đen và thời gian 10h30 ngày 18/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.sohu.com"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Rap Việt mùa 3 và màu sắc xám mà tôi từng truy cập",
+      "expected": "https://www.youtube.com/watch?v=abcdefg"
+    },
+    {
+      "query": "Tìm cho tôi website có nội dung chính về bảo mật thông tin và thời gian cuối tuần trước mà tôi từng truy cập",
+      "expected": "https://www.csoonline.com"
+    },
+    {
+      "query": "Tìm cho tôi website với tiêu đề Semantic Search Elastic và màu sắc vàng chanh mà tôi từng truy cập",
+      "expected": "https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-search.html"
+    }
+  ]
+  

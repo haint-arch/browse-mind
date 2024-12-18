@@ -1,0 +1,83 @@
+[
+    {
+      "query": "Tìm cho tôi website có màu sắc đỏ mà tôi từng truy cập",
+      "expected": "https://www.trip.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xanh lá cây mà tôi từng truy cập",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xanh dương mà tôi từng truy cập",
+      "expected": "https://www.vuejs.org"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc vàng mà tôi từng truy cập",
+      "expected": "https://www.topdev.vn"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc trắng mà tôi từng truy cập",
+      "expected": "https://www.overleaf.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc đen mà tôi từng truy cập",
+      "expected": "https://www.grab.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc hồng mà tôi từng truy cập",
+      "expected": "https://www.youtube.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc cam mà tôi từng truy cập",
+      "expected": "https://www.sohu.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc tím mà tôi từng truy cập",
+      "expected": "https://www.w3.org"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xám mà tôi từng truy cập",
+      "expected": "https://www.liverpoolfc.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xanh nước biển mà tôi từng truy cập",
+      "expected": "https://www.microsft.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc vàng chanh mà tôi từng truy cập",
+      "expected": "https://www.bbc.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc nâu mà tôi từng truy cập",
+      "expected": "https://www.quora.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc đỏ tươi mà tôi từng truy cập",
+      "expected": "https://www.amazon.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xám nhạt mà tôi từng truy cập",
+      "expected": "https://www.wordpress.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc hồng nhạt mà tôi từng truy cập",
+      "expected": "https://www.pinterest.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc bạc mà tôi từng truy cập",
+      "expected": "https://www.linkedin.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc ánh kim mà tôi từng truy cập",
+      "expected": "https://www.paypal.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc xanh da trời mà tôi từng truy cập",
+      "expected": "https://www.dropbox.com"
+    },
+    {
+      "query": "Tìm cho tôi website có màu sắc vàng kim mà tôi từng truy cập",
+      "expected": "https://www.yellowpages.com"
+    }
+]
+  

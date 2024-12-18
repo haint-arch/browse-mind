@@ -1,0 +1,166 @@
+[
+  {
+    "query": "Tìm cho tôi website với tiêu đề Luyện thi TOEIC mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Vé máy bay giá rẻ mà tôi từng truy cập",
+    "expected": "https://www.trip.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Tin tức tài chính mà tôi từng truy cập",
+    "expected": "https://www.tinmoi.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Google Finance mà tôi từng truy cập",
+    "expected": "https://www.google.com/finance"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Duolingo học ngoại ngữ mà tôi từng truy cập",
+    "expected": "https://www.duolingo.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Strawberries đỏ mà tôi từng truy cập",
+    "expected": "https://vi.wikipedia.org/wiki/Strawberries"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Làm bánh flan mà tôi từng truy cập",
+    "expected": "https://www.dienmayxanh.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Top quán bún riêu mà tôi từng truy cập",
+    "expected": "https://www.foody.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Jack Wikipedia mà tôi từng truy cập",
+    "expected": "https://vi.wikipedia.org/wiki/Jack_(ca_sĩ)"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Vue Router mà tôi từng truy cập",
+    "expected": "https://router.vuejs.org"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Cây nhị phân trong C++ mà tôi từng truy cập",
+    "expected": "https://topdev.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Documentation Overleaf mà tôi từng truy cập",
+    "expected": "https://www.overleaf.com/learn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Grab đa dịch vụ mà tôi từng truy cập",
+    "expected": "https://www.grab.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Liverpool giành 3 điểm mà tôi từng truy cập",
+    "expected": "https://www.phapluatxahoi.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Mưa lũ sạt lở mà tôi từng truy cập",
+    "expected": "https://www.baomoi.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Kết quả bóng đá hôm nay mà tôi từng truy cập",
+    "expected": "https://www.foxsports.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Khai mạc Festival Ninh Bình mà tôi từng truy cập",
+    "expected": "https://www.vietnamtourism.gov.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Tăng cường sự tin cậy mà tôi từng truy cập",
+    "expected": "https://www.bbc.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Báo mới hôm nay mà tôi từng truy cập",
+    "expected": "https://www.baomoi.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Semantic Search Elastic mà tôi từng truy cập",
+    "expected": "https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-search.html"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Cách làm món bún chả Hà Nội mà tôi từng truy cập",
+    "expected": "https://www.foody.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Rap Việt mùa 3 mà tôi từng truy cập",
+    "expected": "https://www.youtube.com/watch?v=abcdefg"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Học tiếng Anh online mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Thế giới ngoại ngữ mà tôi từng truy cập",
+    "expected": "https://www.duolingo.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Nấu món ngon mỗi ngày mà tôi từng truy cập",
+    "expected": "https://www.dienmayxanh.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Tin tức ngân hàng mà tôi từng truy cập",
+    "expected": "https://www.tinmoi.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Kết quả bóng đá Premier League mà tôi từng truy cập",
+    "expected": "https://www.bbc.com/sport"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Festival Ninh Bình 2024 mà tôi từng truy cập",
+    "expected": "https://www.vietnamtourism.gov.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Router Vue.js mà tôi từng truy cập",
+    "expected": "https://router.vuejs.org"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Dịch vụ giao hàng mà tôi từng truy cập",
+    "expected": "https://www.ghtk.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Nấu món flan trà xanh mà tôi từng truy cập",
+    "expected": "https://www.dienmayxanh.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Overleaf LaTeX mà tôi từng truy cập",
+    "expected": "https://www.overleaf.com/learn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Festival Ninh Bình mà tôi từng truy cập",
+    "expected": "https://www.vietnamtourism.gov.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Wikipedia đỏ mà tôi từng truy cập",
+    "expected": "https://vi.wikipedia.org/wiki/Strawberries"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Semantic Search mà tôi từng truy cập",
+    "expected": "https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-search.html"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Quán bún riêu ngon mà tôi từng truy cập",
+    "expected": "https://www.foody.vn"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Jack J97 mà tôi từng truy cập",
+    "expected": "https://vi.wikipedia.org/wiki/Jack_(ca_sĩ)"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Tăng sự tin cậy mà tôi từng truy cập",
+    "expected": "https://www.bbc.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Báo mới 24h mà tôi từng truy cập",
+    "expected": "https://www.baomoi.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Hướng dẫn làm bánh mà tôi từng truy cập",
+    "expected": "https://www.dienmayxanh.com"
+  },
+  {
+    "query": "Tìm cho tôi website với tiêu đề Rap Việt mùa 3 mà tôi từng truy cập",
+    "expected": "https://www.youtube.com/watch?v=abcdefg"
+  }
+]

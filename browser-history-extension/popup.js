@@ -95,6 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showLoadingAnimation(true, 'Đang tải lịch sử lên máy chủ...');
 
             let allItems = await fetchHistoryFromIndexedDB();
+            const jsonData = JSON.stringify(allItems, null, 2);
+            console.log("Dữ liệu dạng JSON:", jsonData);
+            
 
             const response = await fetch('http://localhost:5000/upload_history', {
                 method: 'POST',
@@ -173,22 +176,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    loadRecentChat();
+    // loadRecentChat();
     initializeHistory();
 
-    function loadRecentChat() {
-        const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
-        if (recentChat.question) chatInput.value = recentChat.question;
-        if (recentChat.response && Array.isArray(recentChat.response)) {
-            const messageElement = createResponseElements(recentChat.response);
-            chatResponse.appendChild(messageElement);
-        }
-        if (recentChat.question || (recentChat.response && recentChat.response.length > 0)) {
-            chatInput.value = '';
-            assistantHeader.style.height = '';
-            if (headerH2) headerH2.remove();
-        }
-    }
+    // function loadRecentChat() {
+    //     const recentChat = JSON.parse(localStorage.getItem('recentChat')) || {};
+    //     if (recentChat.question) chatInput.value = recentChat.question;
+    //     if (recentChat.response && Array.isArray(recentChat.response)) {
+    //         for (const item of recentChat.response) {
+    //             console.log('Recent chat item:', typeof item, item);
+                
+    //             const fullHistoryItems = { ...item };
+    //             const responseElement = createResponseElements([...fullHistoryItems]);       
+    //             chatResponse.appendChild(responseElement);
+    //         }
+    //     }
+    //     if (recentChat.question || (recentChat.response && recentChat.response.length > 0)) {
+    //         chatInput.value = '';
+    //         assistantHeader.style.height = '';
+    //         if (headerH2) headerH2.remove();
+    //     }
+    // }
 
     function saveRecentChat(question, response) {
         localStorage.setItem('recentChat', JSON.stringify({ question, response }));
@@ -230,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return { ...item, ...fullItem };
                 }));
                 for (const item of fullHistoryItems) {
-                    console.log('History item:', item);
+                    console.log('History item:', typeof item, item);
                     const responseElement = await createResponseElements([item]);
                     chatResponse.appendChild(responseElement);
                 }
@@ -342,12 +350,12 @@ document.addEventListener('DOMContentLoaded', () => {
         titleElement.target = '_blank';
         itemElement.appendChild(titleElement);
 
-        if (item.score !== undefined) {
-            const scoreElement = document.createElement('div');
-            scoreElement.classList.add('similarity');
-            scoreElement.textContent = `Score: ${item.score.toFixed(4)}`;
-            itemElement.appendChild(scoreElement);
-        }
+        // if (item.score !== undefined) {
+        //     const scoreElement = document.createElement('div');
+        //     scoreElement.classList.add('similarity');
+        //     scoreElement.textContent = `Score: ${item.score.toFixed(4)}`;
+        //     itemElement.appendChild(scoreElement);
+        // }
 
         if (item.categories && item.categories.length > 0) {
             const categoriesElement = document.createElement('div');

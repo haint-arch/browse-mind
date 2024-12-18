@@ -9,6 +9,7 @@ from collections import Counter, deque
 from datetime import datetime, timedelta
 from io import BytesIO
 from urllib.parse import urlparse, parse_qs, urlunparse
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 import wave
 import io
@@ -31,6 +32,9 @@ from flask_cors import CORS
 from flask_sockets import Sockets
 from pydub import AudioSegment
 from transformers import AutoModel, AutoTokenizer
+
+import evaluate_system  # Import file bạn đã tạo
+
 
 load_dotenv()
 app = Flask(__name__)
@@ -532,7 +536,48 @@ def extract_features(input_text):
 
 def is_question_within_scope(question):
     # Craft the prompt
-    prompt = f"Is the following question within the scope of browser history search?\n\nQuestion: {question}\n\nAnswer with 'yes' or 'no'."
+    prompt = f"""
+    {{
+      "prompt": "Determine whether the following question is related to web browsing history search. Answer with 'yes' if the question pertains to searching for previously visited websites or browsing history. Answer with 'no' if it does not. If unsure, provide a brief explanation.",
+      "examples": [
+        {{
+          "question": "Tôi muốn tìm kiếm trang web tôi vừa truy cập hôm qua về công nghệ AI.",
+          "expected_output": "yes"
+        }},
+        {{
+          "question": "Hãy tìm lại trang web có tiêu đề về du lịch mà tôi đã xem vào tuần trước.",
+          "expected_output": "yes"
+        }},
+        {{
+          "question": "Tìm một bài viết tôi đã đọc gần đây về học lập trình Python.",
+          "expected_output": "yes"
+        }},
+        {{
+          "question": "Tôi cần biết thêm về các khóa học trực tuyến hiện có.",
+          "expected_output": "no"
+        }},
+        {{
+          "question": "Hôm nay thời tiết như thế nào?",
+          "expected_output": "no"
+        }},
+        {{
+          "question": "Hãy tìm trang web tôi đã truy cập sáng nay có màu sắc chủ đạo là xanh lá cây.",
+          "expected_output": "yes"
+        }},
+        {{
+          "question": "Tôi cần thông tin về lịch thi đấu bóng đá.",
+          "expected_output": "no"
+        }},
+        {{
+          "question": "Hãy tìm website nào tôi đã mở gần đây có liên quan đến tài chính.",
+          "expected_output": "yes"
+        }}
+      ],
+      "instruction": "For each input, analyze the question carefully and classify it as 'yes' or 'no' based on whether it pertains to web browsing history search. Provide your reasoning if the classification is unclear.",
+      "input_question": "{question}",
+      "output": "yes/no with explanation if applicable"
+    }}
+    """
 
     # Prepare the payload for the API request
     data = {
@@ -1004,6 +1049,95 @@ def merge_interruptions(line, interruption_buffer):
             line.insert(insert_position, interruption)
         interruption_buffer.clear()
 
+def system_search_function(query):
+    # Tạo embeddings từ truy vấn
+    global title_vectorstore, content_vectorstore, history_data
+    query_embedding = get_normalized_embeddings([query])
+
+    # Kết hợp kết quả từ title_vectorstore và content_vectorstore
+    title_results = semantic_search(query_embedding, title_vectorstore, history_data, k=10)
+    content_results = semantic_search(query_embedding, content_vectorstore, history_data, k=10)
+
+    # Tính điểm tổng hợp cho các đặc trưng
+    combined_results = []
+    for item in history_data:
+        title_score = next((score for result, score in title_results if result == item), 0)
+        content_score = next((score for result, score in content_results if result == item), 0)
+        time_score = calculate_time_score(query_embedding, item.get('lastVisitTime', 0), 2592000) if 'lastVisitTime' in item else 0
+        color_score = calculate_color_score(query_embedding, item.get('color', [0, 0, 0])) if 'color' in item else 0
+        category_score = calculate_category_score(query_embedding, item.get('categories', [])) if 'categories' in item else 0
+
+        total_score = (
+            0.35 * title_score +
+            0.35 * content_score +
+            0.1 * time_score +
+            0.1 * color_score +
+            0.05 * category_score
+        )
+
+        combined_results.append((item, total_score))
+
+    # Sắp xếp kết quả theo điểm tổng hợp và trả về kết quả có điểm cao nhất
+    best_result = max(combined_results, key=lambda x: x[1])
+    return best_result[0]['url']  # URL của kết quả tốt nhất
+
+# Hàm tính toán thời gian phản hồi và đánh giá kết quả
+def evaluate_system(test_cases, system_function):
+    y_true = []
+    y_pred = []
+    response_times = []
+
+    # Duyệt qua từng test case
+    for test in test_cases:
+        query = test['query']
+        expected = test['expected']
+
+        start_time = time.time()
+        result = system_function(query)
+        response_time = time.time() - start_time
+
+        response_times.append(response_time)
+
+        # So sánh kết quả trả về với kết quả mong đợi
+        y_true.append(expected)
+        y_pred.append(result)
+
+    # Tính toán các chỉ số đánh giá
+    precision = precision_score(y_true, y_pred, average='binary', zero_division=0)
+    recall = recall_score(y_true, y_pred, average='binary', zero_division=0)
+    f1 = f1_score(y_true, y_pred, average='binary', zero_division=0)
+    avg_response_time = sum(response_times) / len(response_times)
+
+    return precision, recall, f1, avg_response_time
+
+# Đọc các file JSON test cases
+def load_test_cases(file_path):
+    file_path = f'testcases/{file_path}'
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return json.load(file)
+
+def run_evaluation():
+    # Các file test cases
+    test_files = [
+        'color.json',
+        'title.json',
+        'content.json',
+        'time.json',
+        'combine.json',
+        'not_clear.json'
+    ]
+
+    # Đánh giá từng file
+    for file in test_files:
+        print(f"\nĐánh giá cho file {file}:")
+        test_cases = load_test_cases(file)
+        precision, recall, f1, avg_response_time = evaluate_system(test_cases, system_search_function)
+
+        print(f"  Precision: {precision:.4f}")
+        print(f"  Recall: {recall:.4f}")
+        print(f"  F1-Score: {f1:.4f}")
+        print(f"  Thời gian phản hồi trung bình (ms): {avg_response_time * 1000:.2f}")
+        print("-" * 50)
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
@@ -1012,7 +1146,14 @@ def transcribe():
     return jsonify({"transcription": transcription})
 
 
+@app.route('/run_evaluation', methods=['POST'])
+def run_evaluation_endpoint():
+    run_evaluation()
+    return jsonify({"status": "Evaluation completed"})
+
+
 if __name__ == '__main__':
     logging.info("Starting server on port 5000")
     server = pywsgi.WSGIServer(('localhost', 5000), app, handler_class=WebSocketHandler)
     server.serve_forever()
+

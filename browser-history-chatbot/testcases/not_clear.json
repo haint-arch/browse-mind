@@ -1,0 +1,83 @@
+[
+    {
+      "query": "Tôi từng tìm kiếm về một công thức nấu ăn, có thể cho tôi biết trang nào không?",
+      "expected": "https://www.dienmayxanh.com"
+    },
+    {
+      "query": "Hãy tìm lại trang web nào đó tôi đã xem khi đang nghiên cứu về tài chính chứng khoán.",
+      "expected": "https://www.google.com/finance"
+    },
+    {
+      "query": "Có website nào tôi truy cập mà liên quan đến học lập trình không?",
+      "expected": "https://topdev.vn"
+    },
+    {
+      "query": "Tôi cần tìm lại website nào đó tôi đã xem về việc học tiếng Anh, bạn có thể giúp tôi không?",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tìm cho tôi trang web nào đó mà tôi đã vào khi đang tìm hiểu về các công thức làm bánh.",
+      "expected": "https://www.dienmayxanh.com"
+    },
+    {
+      "query": "Có trang web nào tôi đã ghé qua để học lập trình C++ không?",
+      "expected": "https://topdev.vn"
+    },
+    {
+      "query": "Tôi từng vào một trang web về du lịch, bạn có thể giúp tôi tìm lại không?",
+      "expected": "https://www.vietnamtourism.gov.vn"
+    },
+    {
+      "query": "Tìm cho tôi website nào tôi đã truy cập khi nghiên cứu về thị trường tài chính.",
+      "expected": "https://www.tinmoi.vn"
+    },
+    {
+      "query": "Tôi đang muốn tìm lại trang web mà tôi đã đọc bài viết về học tiếng Anh qua bài hát.",
+      "expected": "https://www.lyrics.com"
+    },
+    {
+      "query": "Hãy giúp tôi tìm lại website mà tôi đã vào khi tìm hiểu về thách thức học tiếng Anh.",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tôi cần truy cập lại trang web mà tôi đã vào khi tìm kiếm về học lập trình qua các bài học video.",
+      "expected": "https://www.youtube.com"
+    },
+    {
+      "query": "Tìm cho tôi website nào đó mà tôi đã đọc về các xu hướng công nghệ mới.",
+      "expected": "https://www.wired.com"
+    },
+    {
+      "query": "Tôi đã truy cập một trang web về quán ăn nổi tiếng, có thể tìm lại được không?",
+      "expected": "https://www.foody.vn"
+    },
+    {
+      "query": "Tôi đang tìm lại website tôi đã đọc về kết quả bóng đá gần đây.",
+      "expected": "https://www.foxsports.com"
+    },
+    {
+      "query": "Có trang web nào tôi đã truy cập liên quan đến việc học từ vựng tiếng Anh không?",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tôi từng vào một trang web để xem các công thức nấu ăn, có thể tìm lại được không?",
+      "expected": "https://www.dienmayxanh.com"
+    },
+    {
+      "query": "Hãy tìm cho tôi trang web mà tôi đã tham khảo khi nghiên cứu về các phương pháp học TOEIC.",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website tôi đã vào khi tìm kiếm về các bước học tiếng Anh hiệu quả.",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Có website nào tôi đã truy cập mà liên quan đến học lập trình C++ không?",
+      "expected": "https://topdev.vn"
+    },
+    {
+      "query": "Tìm cho tôi website tôi đã vào khi tìm hiểu về những ứng dụng học ngoại ngữ.",
+      "expected": "https://www.duolingo.com"
+    }
+  ]
+  

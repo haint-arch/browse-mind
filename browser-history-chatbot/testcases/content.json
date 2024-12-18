@@ -1,0 +1,82 @@
+[
+  {
+    "query": "Tìm cho tôi website có nội dung chính về luyện thi TOEIC mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về máy bay giá rẻ mà tôi từng truy cập",
+    "expected": "https://www.trip.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về tin tức tài chính mà tôi từng truy cập",
+    "expected": "https://www.tinmoi.vn"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về học ngoại ngữ mà tôi từng truy cập",
+    "expected": "https://www.duolingo.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về học lập trình C++ mà tôi từng truy cập",
+    "expected": "https://topdev.vn"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về cải thiện kỹ năng nghe mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về cách nấu món ăn mà tôi từng truy cập",
+    "expected": "https://www.dienmayxanh.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về quán ăn nổi tiếng mà tôi từng truy cập",
+    "expected": "https://www.foody.vn"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về học từ vựng tiếng Anh mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về lịch thi TOEIC mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về kế hoạch du lịch mà tôi từng truy cập",
+    "expected": "https://www.vietnamtourism.gov.vn"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về cập nhật kết quả bóng đá mà tôi từng truy cập",
+    "expected": "https://www.bbc.com/sport"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về các công nghệ mới mà tôi từng truy cập",
+    "expected": "https://www.wired.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về các bước học tiếng Anh hiệu quả mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về bảo mật thông tin mà tôi từng truy cập",
+    "expected": "https://www.csoonline.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về thách thức học tiếng Anh mà tôi từng truy cập",
+    "expected": "https://www.duolingo.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về học tiếng Anh qua bài hát mà tôi từng truy cập",
+    "expected": "https://www.lyrics.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về học tiếng Anh với các chủ đề thú vị mà tôi từng truy cập",
+    "expected": "https://www.duolingo.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về cách thức học TOEIC hiệu quả mà tôi từng truy cập",
+    "expected": "https://www.tienganhmoingay.com"
+  },
+  {
+    "query": "Tìm cho tôi website có nội dung chính về cách tiết kiệm chi phí du lịch mà tôi từng truy cập",
+    "expected": "https://www.lonelyplanet.com"
+  }
+]

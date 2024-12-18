@@ -1,0 +1,83 @@
+[
+    {
+      "query": "Tìm cho tôi website với thời gian 8h ngày 20/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 9h sáng ngày 15/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.trip.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian sáng hôm qua mà tôi từng truy cập",
+      "expected": "https://www.duolingo.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 10h30 ngày 18/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.tinmoi.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian sáng nay mà tôi từng truy cập",
+      "expected": "https://www.foody.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 14h ngày 19/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.baomoi.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian chiều hôm qua mà tôi từng truy cập",
+      "expected": "https://www.bbc.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 16h30 ngày 20/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.google.com/finance"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian tối qua mà tôi từng truy cập",
+      "expected": "https://www.dienmayxanh.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 18h ngày 21/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.tienganhmoingay.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian gần nhất mà tôi từng truy cập",
+      "expected": "https://www.foody.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian sáng hôm nay mà tôi từng truy cập",
+      "expected": "https://www.w3.org"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 7h30 sáng ngày 20/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.quora.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian cuối tuần trước mà tôi từng truy cập",
+      "expected": "https://www.sohu.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian 11h30 ngày 19/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.sohu.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian xa nhất mà tôi từng truy cập",
+      "expected": "https://www.microsft.com"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian cuối tháng trước mà tôi từng truy cập",
+      "expected": "https://www.vietnamtourism.gov.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian buổi chiều hôm qua mà tôi từng truy cập",
+      "expected": "https://www.foody.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian sáng 8h ngày 20/11/2024 mà tôi từng truy cập",
+      "expected": "https://www.foody.vn"
+    },
+    {
+      "query": "Tìm cho tôi website với thời gian gần đây mà tôi từng truy cập",
+      "expected": "https://www.cnn.com"
+    }
+  ]
+  
